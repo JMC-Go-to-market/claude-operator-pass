@@ -74,8 +74,18 @@ def find_skill_files() -> list[Path]:
     return sorted(out)
 
 
+MAX_INPUT_BYTES = 2_000_000
+
+
 def validate_one(path: Path) -> Tuple[bool, list[str]]:
-    text = path.read_text(encoding="utf-8")
+    try:
+        if not path.is_file() or path.stat().st_size > MAX_INPUT_BYTES:
+            return False, ["cannot read SKILL.md"]
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return False, ["cannot read SKILL.md as UTF-8 text"]
+    except OSError:
+        return False, ["cannot read SKILL.md"]
     fm = parse_frontmatter(text)
     issues: list[str] = []
 
