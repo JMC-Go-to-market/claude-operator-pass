@@ -19,17 +19,67 @@ trap 'rm -rf "$TEMP_DIR"' EXIT
 echo "Installing claude-operator-pass..."
 git clone --depth 1 "$REPO_URL" "$TEMP_DIR" >/dev/null 2>&1
 
-echo "  + operator-pass (orchestrator)"
-rm -rf "$SKILLS_DIR/operator-pass"
-cp -r "$TEMP_DIR/operator-pass" "$SKILLS_DIR/"
+safe_skill_name() {
+  # C locale: in UTF-8, a-z can include A-Z, and this check would then accept BadName.
+  (
+    LC_ALL=C
+    case "$1" in
+      ""|-*|*-|*--*|*[!a-z0-9-]*) exit 1 ;;
+    esac
+  )
+}
 
+# Skip .git. Any other symlink is refused before a destination is deleted.
+if find "$TEMP_DIR" -path "$TEMP_DIR/.git" -prune -o -type l -print | grep -q .; then
+  echo "ERROR: the pack contains a symlink. Not installing." >&2
+  exit 1
+fi
+
+install_one() {
+  local from="$1" name="$2"
+  local root target parent
+  root="$(cd "$SKILLS_DIR" && pwd -P)"
+  target="$root/$name"
+  case "$target" in
+    "$root"/*) ;;
+    *)
+      echo "ERROR: refusing to install outside $root" >&2
+      exit 1
+      ;;
+  esac
+  parent="$(dirname "$target")"
+  if [[ "$parent" != "$root" ]]; then
+    echo "ERROR: refusing to install outside $root" >&2
+    exit 1
+  fi
+  rm -rf -- "$target"
+  cp -R "$from" "$target"
+  echo "  + $name"
+}
+
+name_list=""
+if [[ -d "$TEMP_DIR/operator-pass" ]]; then
+  name_list="operator-pass"
+fi
 for skill_dir in "$TEMP_DIR/skills"/operator-pass-*; do
-    if [[ -d "$skill_dir" ]]; then
-        skill_name=$(basename "$skill_dir")
-        rm -rf "${SKILLS_DIR:?}/$skill_name"
-        cp -r "$skill_dir" "$SKILLS_DIR/"
-        echo "  + $skill_name"
-    fi
+  if [[ -d "$skill_dir" ]]; then
+    name_list="${name_list}"$'\n'"$(basename "$skill_dir")"
+  fi
+done
+while IFS= read -r name; do
+  [[ -n "$name" ]] || continue
+  if ! safe_skill_name "$name"; then
+    echo "ERROR: skill name is not lowercase letters, digits, and hyphens: $name" >&2
+    exit 1
+  fi
+done <<< "$name_list"
+if [[ -d "$TEMP_DIR/operator-pass" ]]; then
+  install_one "$TEMP_DIR/operator-pass" "operator-pass"
+fi
+for skill_dir in "$TEMP_DIR/skills"/operator-pass-*; do
+  if [[ -d "$skill_dir" ]]; then
+    install_one "$skill_dir" "$(basename "$skill_dir")"
+  fi
 done
 
 echo ""

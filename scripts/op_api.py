@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -29,8 +30,21 @@ from typing import Any, Dict, Optional
 
 
 DEFAULT_BASE_URL = "https://api.jaymountconsulting.com/v1"
+ALLOWED_HOST = "api.jaymountconsulting.com"
 DEFAULT_TIMEOUT_S = 30
+MAX_INPUT_BYTES = 2_000_000
 USER_AGENT = "claude-operator-pass/0.2 (https://github.com/JMC-Go-to-market/claude-operator-pass)"
+_PATH_RE = re.compile(r"(?:/[A-Za-z0-9._~-]+)+")
+
+
+class _SameHostRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse a redirect that would carry the bearer token off the API host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        parts = urllib.parse.urlsplit(newurl)
+        if parts.scheme != "https" or (parts.hostname or "") != ALLOWED_HOST:
+            raise urllib.error.URLError("refusing redirect")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def get_key() -> str:
@@ -44,8 +58,68 @@ def get_key() -> str:
     return key
 
 
+def _safe_base_path(path: str) -> bool:
+    if path in ("", "/"):
+        return True
+    if ".." in path.split("/"):
+        return False
+    return bool(_PATH_RE.fullmatch(path))
+
+
 def base_url() -> str:
-    return os.environ.get("OPERATOR_PASS_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
+    raw = os.environ.get("OPERATOR_PASS_BASE_URL", DEFAULT_BASE_URL).strip() or DEFAULT_BASE_URL
+    parts = urllib.parse.urlsplit(raw)
+    if (
+        parts.scheme != "https"
+        or (parts.hostname or "") != ALLOWED_HOST
+        or parts.username
+        or parts.password
+        or parts.query
+        or parts.fragment
+        or not _safe_base_path(parts.path or "")
+    ):
+        sys.stderr.write(
+            "ERROR: OPERATOR_PASS_BASE_URL must be https://api.jaymountconsulting.com\n"
+        )
+        sys.exit(2)
+    path = (parts.path or "").rstrip("/")
+    return f"https://{ALLOWED_HOST}{path}"
+
+
+def fail_input(message: str) -> None:
+    sys.stderr.write(f"error: {message}\n")
+    raise SystemExit(2)
+
+
+def read_json_object(text: str) -> Dict[str, Any]:
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        fail_input("invalid JSON")
+    if not isinstance(data, dict):
+        fail_input("JSON must be an object")
+    return data
+
+
+def read_input_file(path: str) -> Dict[str, Any]:
+    try:
+        with open(path, "rb") as handle:
+            raw = handle.read(MAX_INPUT_BYTES + 1)
+    except IsADirectoryError:
+        fail_input(f"not a file: {path}")
+    except FileNotFoundError:
+        fail_input(f"file not found: {path}")
+    except OSError:
+        fail_input(f"cannot read file: {path}")
+    if len(raw) > MAX_INPUT_BYTES:
+        fail_input(f"file is too large: {path}")
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raw = raw[3:]
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        fail_input(f"file is not UTF-8 text: {path}")
+    return read_json_object(text)
 
 
 def request(
@@ -68,10 +142,11 @@ def request(
         data = json.dumps(body).encode("utf-8")
         headers["Content-Type"] = "application/json"
 
+    opener = urllib.request.build_opener(_SameHostRedirect)
     for attempt in range(2 if retry_on_429 else 1):
         req = urllib.request.Request(url, data=data, method=method, headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+            with opener.open(req, timeout=timeout_s) as resp:
                 raw = resp.read().decode("utf-8", errors="ignore")
                 return {
                     "ok": True,
@@ -100,17 +175,22 @@ def request(
                 return {"ok": False, "status": 402, "data": err_data}
             if err.code == 429:
                 if retry_on_429 and attempt == 0:
-                    retry_after = int(err.headers.get("Retry-After", "30"))
+                    try:
+                        retry_after = int(err.headers.get("Retry-After", "30"))
+                    except ValueError:
+                        retry_after = 30
+                    retry_after = max(0, min(retry_after, 60))
                     sys.stderr.write(f"429 rate-limited — retrying in {retry_after}s...\n")
                     time.sleep(retry_after)
                     continue
-                sys.stderr.write(f"ERROR 429: rate-limited. Try again later.\n")
+                sys.stderr.write("ERROR 429: rate-limited. Try again later.\n")
                 return {"ok": False, "status": 429, "data": err_data}
-            sys.stderr.write(f"ERROR {err.code}: {body_text[:200]}\n")
+            preview = body_text[:200].replace(key, "[redacted]")
+            sys.stderr.write(f"ERROR {err.code}: {preview}\n")
             return {"ok": False, "status": err.code, "data": err_data}
-        except (urllib.error.URLError, TimeoutError) as err:
-            sys.stderr.write(f"ERROR network: {err}\n")
-            return {"ok": False, "status": 0, "data": {"error": str(err)}}
+        except (urllib.error.URLError, TimeoutError):
+            sys.stderr.write("ERROR network: could not reach the Operator Pass API\n")
+            return {"ok": False, "status": 0, "data": {"error": "network"}}
     return {"ok": False, "status": 0, "data": {}}
 
 
@@ -139,6 +219,8 @@ def cmd_list() -> int:
     # Group by category
     by_cat: Dict[str, list] = {}
     for t in tools:
+        if not isinstance(t, dict):
+            continue
         cat = t.get("category", "uncategorized")
         by_cat.setdefault(cat, []).append(t)
     for cat, items in by_cat.items():
@@ -189,14 +271,11 @@ def main() -> int:
         return cmd_schema(args.slug)
     if args.cmd == "call":
         if args.input_file:
-            with open(args.input_file, "r", encoding="utf-8") as f:
-                inputs = json.load(f)
+            inputs = read_input_file(args.input_file)
         else:
-            try:
-                inputs = json.loads(args.input)
-            except json.JSONDecodeError as err:
-                sys.stderr.write(f"Bad --input JSON: {err}\n")
-                return 2
+            if len(args.input.encode("utf-8")) > MAX_INPUT_BYTES:
+                fail_input("input is too large")
+            inputs = read_json_object(args.input)
         return cmd_call(args.slug, inputs)
     return 2
 
