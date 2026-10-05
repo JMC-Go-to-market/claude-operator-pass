@@ -1,14 +1,16 @@
-# Operator Pass API nightly smoke
+# Operator Pass API smoke
 # Confirms api.jaymountconsulting.com /me responds + tools catalog is reachable.
 # Only deployed in claude-operator-pass.
+#
+# Manual-only until Pass unlocks (commercial HOLD). Nightly schedule stays
+# disabled until OPERATOR_PASS_API_KEY is set and Pass is unlocked; then
+# restore: schedule: { cron: "0 9 * * *" }  # 09:00 UTC daily
 #
 # Requires:
 #   OPERATOR_PASS_API_KEY — org secret, claude-operator-pass-only visibility
 name: Smoke (Operator Pass API)
 
 on:
-  schedule:
-    - cron: "0 9 * * *"   # 09:00 UTC daily
   workflow_dispatch:
 
 jobs:
