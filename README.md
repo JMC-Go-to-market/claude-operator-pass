@@ -182,9 +182,9 @@ gives you the deterministic execution layer.
 [Operator Pass](https://jaymountconsulting.com/operator-pass) is the
 all-access subscription:
 
-- The full Compounding Engine course catalog (27 courses, 4 modules)
+- The full Compounding Engine build guide catalog
 - The 22+ tool API (this skill wraps it)
-- Weekly office hours with Jay
+- Prototypes and Skills as they ship
 
 ## Free, no signup
 
