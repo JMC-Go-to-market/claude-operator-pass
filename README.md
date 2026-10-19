@@ -184,7 +184,7 @@ all-access subscription:
 
 - The full build guide catalog
 - The 22+ tool API (this skill wraps it)
-- Prototypes and Skills as they ship
+- Prototypes and Skills, plus live office hours
 
 ## Free, no signup
 
