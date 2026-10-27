@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- `data-atlas-search` and `data-atlas-dossier` documented in `operator-pass/SKILL.md`: when to use them, inputs, outputs, and the `found: false` case. Usage lines in `scripts/op_api.py`.
+
 ## [0.2.1] — 2026-05-24
 
 Marketplace-submission compliance pass. No functional changes.

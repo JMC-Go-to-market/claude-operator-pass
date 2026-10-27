@@ -5,12 +5,14 @@ description: >
   api.jaymountconsulting.com/v1/tools/<slug> for cross-runtime agent use —
   Cold Email Linter, EVP Generator, Pipeline Calculator, GEO Visibility
   Audit, Competitive Teardown, Paid Media Teardown, Blended GTM Dashboard,
-  and 15 more multi-input modelers and generators. Bring your own Operator
+  GTM Data Atlas search and dossiers, and 15 more multi-input modelers and
+  generators. Bring your own Operator
   Pass API key (env var OPERATOR_PASS_API_KEY); subscribe at
   jaymountconsulting.com/operator-pass. Triggers on: "lint this cold email",
   "generate an EVP via API", "run the pipeline calculator", "GEO audit",
   "competitive teardown", "operator pass tool", "JMC API", "subscription
-  tool", "agent-callable tool".
+  tool", "agent-callable tool", "data atlas", "which data source covers",
+  "compare data vendors", "pick an enrichment source".
 allowed-tools: Read Bash WebFetch
   - Write
 license: MIT
@@ -93,6 +95,13 @@ structured JSON (not LLM-narrated prose).
 | `blended-gtm-dashboard` | 11-slider dashboard, marquee modeler |
 | `gtm-architecture-diagrammer` | Canvas + AI coherence audit |
 
+### Data sources (GTM Data Atlas)
+
+| Tool slug | What it does |
+|---|---|
+| `data-atlas-search` | Find data sources by text, tag or category. Returns a short list of slugs |
+| `data-atlas-dossier` | The full dossier for one source: coverage, who it fits, pricing reality, what it pairs with, compliance, citations |
+
 (Full catalog + per-tool input schema at runtime via `/operator-pass list`.)
 
 ## Workflow
@@ -125,6 +134,8 @@ Detect intent from the user's request:
 | "Competitive teardown of <URL>" | `competitive-teardown` |
 | "Run the pipeline math" | `blended-gtm-dashboard` |
 | "Score this ad creative" | `ad-creative-scorer` |
+| "Which data source covers <need>?" | `data-atlas-search`, then `data-atlas-dossier` |
+| "Tell me about <data source>" | `data-atlas-dossier` |
 
 If intent is ambiguous, ask one clarifying question. Don't list tools
 unless the user asks.
@@ -162,6 +173,70 @@ Each tool returns structured JSON. Pretty-print the result, then offer
 - For modeler tools (`blended-gtm-dashboard`,
   `cohort-economics-modeler`): "Want me to run a sensitivity analysis
   on the top 2 levers?"
+
+## Data Atlas: search, then dossier
+
+Use these two tools when you are choosing where data comes from: a list
+source, an enrichment vendor, a signal feed. Search first, read the
+dossier for the two or three best matches, then pick. Both are read-only.
+
+### `data-atlas-search`
+
+Inputs (all optional):
+
+| Field | Type | Notes |
+|---|---|---|
+| `query` | string, up to 200 chars | Free text, matched against name, summary, category and tags |
+| `tag` | string | A data type, play or segment slug, e.g. `cold-email` |
+| `category` | string | Exact category name, case-insensitive, e.g. `Enrichment` |
+| `limit` | integer 1-100 | Default 25 |
+| `offset` | integer, 0 or more | For paging |
+
+Output:
+
+```
+{
+  "total": <every match>,
+  "limit": 25,
+  "offset": 0,
+  "results": [
+    { "slug": "...", "name": "...", "summary": "...", "category": "...", "tags": ["..."], "url": "..." }
+  ]
+}
+```
+
+`total` counts every match, so page with `offset` when it is larger
+than `limit`. `url` opens the same source in the JMC app.
+
+### `data-atlas-dossier`
+
+Input: `{ "slug": "<slug from data-atlas-search>" }`
+
+Output when the source has a dossier: `found: true`, the
+source's name, summary, coverage strengths and gaps, pricing model,
+`tags`, `citations`, `related` sources, and `sections` with nine keys:
+
+`overview`, `coverage_deep_dive`, `icp_segment`, `operator_moves`,
+`gtm_engineering`, `pricing_reality`, `pairs_with`,
+`practitioner_reality`, `compliance`.
+
+When the slug has no dossier yet, or does not exist, the call
+still returns HTTP 200:
+
+```json
+{ "found": false, "slug": "...", "message": "..." }
+```
+
+Treat that as "not in the Atlas yet". Say so, and go back to
+`data-atlas-search` for another match. Do not fill in a dossier
+yourself.
+
+### Example
+
+```bash
+python3 scripts/op_api.py call data-atlas-search --input '{"query":"job change signals","limit":5}'
+python3 scripts/op_api.py call data-atlas-dossier --input '{"slug":"<slug>"}'
+```
 
 ## Sub-skills
 
