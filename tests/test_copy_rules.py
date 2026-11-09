@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Reader-facing copy follows the org rules: no 'with Jay', no typed counts or
+"""Run: python3 -m unittest tests.test_copy_rules (CI runs all of tests/).
+
+Reader-facing copy follows the org rules: no 'with Jay', no typed counts or
 prices, no cadence promises, brand name, no internal labels or competitors."""
 
 import re
@@ -26,7 +28,10 @@ RULES = {
     "typed count": r"(?i)\b\d+\+?\s*(free\s+)?(tools?|courses?|modules?|packs?|more)\b|\b\d+-tool\b|and \d+ more",
     "typed price": r"\$\s?\d",
     "legal name as brand": r"Jay Mount Consulting",
-    "internal label": r"(?i)compounding engine|soft path|methodology",
+    # Planning labels per jaymount-site .specs/no-internal-labels-in-copy.md
+    "internal label (jaymount-site spec)": r"(?i)soft (path|start|next step|cta|read|on-ramp)|start soft|\bHOLD\b|Pass Claim|no Claim|densify|Signal\+GA|product context",
+    # Org copy rule, not in that spec: internal product and method names
+    "internal name": r"(?i)compounding engine|methodology",
     "competitor": r"(?i)coldiq|\btreg\b|superdesign",
 }
 
