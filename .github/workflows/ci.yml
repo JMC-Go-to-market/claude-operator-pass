@@ -47,6 +47,9 @@ jobs:
           print(f'  ✓ plugin.json valid: name={d[\"name\"]}, version={d[\"version\"]}')
           "
 
+      - name: Run unit tests (includes copy rules)
+        run: python3 -m unittest discover -s tests -v
+
       - name: Validate install.sh + install.ps1 syntax
         run: |
           if [ -f install.sh ]; then
