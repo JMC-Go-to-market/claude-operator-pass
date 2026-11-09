@@ -1,8 +1,8 @@
 {
   "name": "operator-pass",
-  "version": "0.2.1",
-  "description": "Operator Pass API skill for Claude Code. Wraps the JMC tools API (cold-email-linter, EVP generator, pipeline calculator, GEO visibility audit, competitive teardown, and 17 more) for use in any agent. Bring your own Operator Pass API key.",
-  "author": { "name": "Jay Mount Consulting" },
+  "version": "0.2.2",
+  "description": "Operator Pass API skill for Claude Code. Wraps the JMC tools API (cold-email-linter, EVP generator, pipeline calculator, GEO visibility audit, competitive teardown, and more) for use in any agent. Bring your own Operator Pass API key.",
+  "author": { "name": "JMC Go-to-Market Systems" },
   "license": "MIT",
   "homepage": "https://github.com/JMC-Go-to-market/claude-operator-pass"
 }
