@@ -4,12 +4,12 @@
 
 # claude-operator-pass
 
-> Replace a $30K analyst-tool subscription stack with one Operator Pass
-> subscription — wrap the JMC tools API for any agent runtime.
+> One Operator Pass subscription, wrapped as a skill: call the JMC tools
+> API from any agent runtime.
 
 The deterministic execution layer for the JMC framework. Cold Email
 Linter, EVP Generator, Pipeline Calculator, GEO Visibility Audit,
-Competitive Teardown, Paid Media Teardown, and 16+ more — all
+Competitive Teardown, Paid Media Teardown, and more — all
 server-side, schema-validated, real-result endpoints (not prompts).
 
 Subscriber-gated. Bring your own **[Operator Pass](https://jaymountconsulting.com/operator-pass)**
@@ -35,7 +35,7 @@ graph TB
     B -->|Key + no config| D[Onboarding]
     B -->|Ready| E[Call / List / Schema]
     E --> F[op_api.py<br/>script]
-    F --> G[JMC API<br/>22+ tools]
+    F --> G[JMC API<br/>tools]
 
     style C fill:#1a1a2e,stroke:#cc4714
     style F fill:#1a1a2e,stroke:#00d4ff
@@ -121,8 +121,8 @@ min) → groups by category.
 
 ## Available tools (live catalog)
 
-The catalog is fetched live, so this list is always current. As of
-v0.2.0 the API exposes 22+ tools across 4 categories:
+The catalog is fetched live, so this list is always current. The API
+groups its tools into categories, for example:
 
 ### Outbound
 - `cold-email-linter` — Per-email score + line-level rewrite
@@ -151,18 +151,9 @@ v0.2.0 the API exposes 22+ tools across 4 categories:
 
 Run `/operator-pass list` for the live catalog.
 
-## Cost arbitrage
+## One subscription
 
-| Tool stack | $ range | What you'd subscribe to |
-|---|---|---|
-| Cold-email QA tools (Lemwarm, Mailmeteor, Glock) | ~$200/mo | Email linting + deliverability |
-| Competitive intel (Crayon, Klue lite) | $400-1000/mo | Teardowns + battlecards |
-| Modeling (custom spreadsheets + Looker seats) | $200-800/mo | Pipeline + cohort math |
-| Subject-line testing (Phrasee, Touchstone) | $300+/mo | Subject scoring |
-
-**Total stack**: $1,100-2,200/month = $13K-26K/year for tooling.
-
-**Operator Pass**: one flat subscription, 22+ tools, no per-seat pricing.
+One Operator Pass subscription covers the whole API.
 [Current terms](https://jaymountconsulting.com/operator-pass).
 
 This skill packages the tools into an agent-callable interface — your
@@ -174,7 +165,7 @@ runtime knows how to invoke them as if they were built-in.
 - **[cmj-hub/claude-psp](https://github.com/cmj-hub/claude-psp)** — `persona-from-crm` clusters real prospects into PSPs
 - **[cmj-hub/claude-evp](https://github.com/cmj-hub/claude-evp)** — `evp-generator` produces variants; `evp-brief-generator` produces briefs
 
-The free framework skills give you the methodology. This API skill
+The free framework skills give you the frameworks. This API skill
 gives you the deterministic execution layer.
 
 ## Operator Pass
@@ -183,15 +174,15 @@ gives you the deterministic execution layer.
 all-access subscription:
 
 - The full build guide catalog
-- The 22+ tool API (this skill wraps it)
+- The tool API (this skill wraps it)
 - Prototypes and Skills, plus live office hours
 
 ## Free, no signup
 
 Every endpoint this skill calls has a free browser version. No account, no key.
 
-- **[All 30+ free tools](https://jaymountconsulting.com/prototypes)** — linters, calculators, teardowns, modelers
-- [Skill packs](https://jaymountconsulting.com/skills) — five MIT packs that run locally with no API at all
+- **[All the free tools](https://jaymountconsulting.com/prototypes)** — linters, calculators, teardowns, modelers
+- [Skill packs](https://jaymountconsulting.com/skills) — MIT packs that run locally with no API at all
 - [Frameworks](https://jaymountconsulting.com/frameworks) · [Prompt Library](https://jaymountconsulting.com/resources/prompt-library)
 
 ## Free, by email
@@ -205,7 +196,7 @@ That one does ask for an email, and it enrols you in a short follow-up on the sa
 ## License
 
 MIT (skill code). The API itself is subscription-gated. Built by
-[Jay Mount Consulting](https://jaymountconsulting.com).
+[JMC Go-to-Market Systems](https://jaymountconsulting.com).
 
 ## Regenerating the artwork
 

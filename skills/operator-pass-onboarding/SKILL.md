@@ -119,7 +119,7 @@ Save to `brand-config.api` + `SOUL.md`.
 ### Step 7 — Quota awareness
 
 ```
-Operator Pass tiers have monthly quotas. Want a warning when you're
+Your Operator Pass has a usage quota. Want a warning when you're
 running low?
 
   Warn at: 20% remaining (default) / 10% / 30% / Never warn

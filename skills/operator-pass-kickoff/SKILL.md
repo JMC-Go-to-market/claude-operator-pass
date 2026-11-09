@@ -50,7 +50,7 @@ state = {
 You need an Operator Pass subscription + API key to use this skill.
 
 → Subscribe: https://jaymountconsulting.com/operator-pass
-   - Includes all 22+ tools + the full Compounding Engine course catalog
+   - Includes every tool in the API + the full build guide catalog
    - Free browser versions of every tool: https://jaymountconsulting.com/tools
 
 Once you have a key:

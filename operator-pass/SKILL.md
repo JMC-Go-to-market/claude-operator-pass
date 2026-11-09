@@ -5,7 +5,7 @@ description: >
   api.jaymountconsulting.com/v1/tools/<slug> for cross-runtime agent use —
   Cold Email Linter, EVP Generator, Pipeline Calculator, GEO Visibility
   Audit, Competitive Teardown, Paid Media Teardown, Blended GTM Dashboard,
-  GTM Data Atlas search and dossiers, and 15 more multi-input modelers and
+  GTM Data Atlas search and dossiers, plus more multi-input modelers and
   generators. Bring your own Operator
   Pass API key (env var OPERATOR_PASS_API_KEY); subscribe at
   jaymountconsulting.com/operator-pass. Triggers on: "lint this cold email",
@@ -53,7 +53,7 @@ No key, no calls. The skill won't call the API anonymously.
 
 ## Available tools (current catalog)
 
-The JMC tools API exposes 22+ multi-input modelers, generators, and
+The JMC tools API exposes multi-input modelers, generators, and
 auditors. Each one is server-side, schema-validated, and returns
 structured JSON (not LLM-narrated prose).
 
@@ -261,7 +261,7 @@ Pairs especially well with:
 - **[claude-psp](https://github.com/cmj-hub/claude-psp)** — `persona-from-crm` clusters real prospect data into PSPs
 - **[claude-evp](https://github.com/cmj-hub/claude-evp)** — `evp-generator` produces variants; `evp-brief-generator` produces full briefs
 
-The free framework skills give you the methodology. The API gives you
+The free framework skills give you the frameworks. The API gives you
 the deterministic execution layer.
 
 ## Operator Pass
@@ -269,8 +269,8 @@ the deterministic execution layer.
 [Operator Pass](https://jaymountconsulting.com/operator-pass) is the
 all-access subscription to:
 
-- The full Compounding Engine course catalog (27 courses, 4 modules)
-- The 22-tool API (this skill wraps it)
-- Weekly office hours with Jay
+- The full build guide catalog
+- The tool API (this skill wraps it)
+- Live office hours
 
 → [jaymountconsulting.com/operator-pass](https://jaymountconsulting.com/operator-pass)
