@@ -53,6 +53,9 @@ jobs:
             bash -n install.sh && echo "  ✓ install.sh: bash syntax OK"
           fi
 
+      - name: Reader-facing copy follows the org rules
+        run: python3 -m unittest tests.test_copy_rules -v
+
   lint-python:
     name: Lint Python scripts
     runs-on: ubuntu-latest

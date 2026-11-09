@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Reader-facing copy follows the org rules: no 'with Jay', no typed counts or
-prices, no cadence promises, brand name, no internal labels or competitors."""
+prices, no cadence promises, brand name, no internal labels or competitors.
+
+"Internal label" is defined by JMC-Go-to-market/jaymount-site .specs/no-internal-labels-in-copy.md.
+Runs in CI (.github/workflows/ci.yml, "Reader-facing copy follows the org rules")."""
 
 import re
 import unittest
