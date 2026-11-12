@@ -190,6 +190,9 @@ def request(
             preview = body_text[:200].replace(key, "[redacted]")
             sys.stderr.write(f"ERROR {err.code}: {preview}\n")
             return {"ok": False, "status": err.code, "data": err_data}
+        except json.JSONDecodeError:
+            sys.stderr.write("ERROR response: invalid JSON from the Operator Pass API\n")
+            return {"ok": False, "status": resp.status, "data": {"error": "invalid JSON"}}
         except (urllib.error.URLError, TimeoutError):
             sys.stderr.write("ERROR network: could not reach the Operator Pass API\n")
             return {"ok": False, "status": 0, "data": {"error": "network"}}
