@@ -30,20 +30,16 @@ jobs:
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Extract changelog notes for this version
-        id: notes
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           python3 - <<'PY'
           import os, re
+          from pathlib import Path
           version = os.environ["VERSION"]
           text = open("CHANGELOG.md").read()
           pattern = rf"## \[{re.escape(version)}\][^\n]*\n(.*?)(?=\n## \[|\Z)"
           m = re.search(pattern, text, re.DOTALL)
           notes = m.group(1).strip() if m else f"Release v{version}"
-          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write("notes<<EOF\n")
-              f.write(notes)
-              f.write("\nEOF\n")
+          (Path(os.environ["RUNNER_TEMP"]) / "release-notes.md").write_text(notes, encoding="utf-8")
           PY
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -51,10 +47,10 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          gh release view "${{ steps.version.outputs.tag }}" >/dev/null 2>&1 \
-            && gh release edit "${{ steps.version.outputs.tag }}" \
-                 --notes "${{ steps.notes.outputs.notes }}" \
-            || gh release create "${{ steps.version.outputs.tag }}" \
-                 --title "${{ steps.version.outputs.tag }}" \
-                 --notes "${{ steps.notes.outputs.notes }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi
