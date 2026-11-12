@@ -29,6 +29,14 @@ def make_repo(repo: Path, kind: str) -> None:
     skills.mkdir()
     if kind == "symlink":
         (skills / "operator-pass-evil").symlink_to(repo / "operator-pass")
+    elif kind == "many-symlinks":
+        # Enough links that find keeps writing after grep -q exits: under pipefail the
+        # SIGPIPE makes `find | grep -q .` false, so the old check failed open.
+        bad = skills / "operator-pass-many"
+        bad.mkdir()
+        (bad / "SKILL.md").write_text("---\nname: operator-pass-many\n---\n", encoding="utf-8")
+        for i in range(6000):
+            (bad / f"link-{i:05d}-padding-to-fill-the-pipe-buffer").symlink_to(repo / "operator-pass")
     elif kind == "upper":
         bad = skills / "operator-pass-Bad"
         bad.mkdir()
@@ -86,6 +94,23 @@ class OperatorPassInstallGuard(unittest.TestCase):
             home = root / "home"
             home.mkdir()
             make_repo(repo, "symlink")
+            keep = home / ".claude" / "skills" / "operator-pass" / "KEEP"
+            keep.parent.mkdir(parents=True)
+            keep.write_text("keep", encoding="utf-8")
+            script = root / "install.sh"
+            installer(repo, script)
+            result = invoke(script, home)
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("symlink", result.stderr)
+            self.assertEqual(keep.read_text(encoding="utf-8"), "keep")
+
+    def test_many_symlinks_refuse_before_delete(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            home = root / "home"
+            home.mkdir()
+            make_repo(repo, "many-symlinks")
             keep = home / ".claude" / "skills" / "operator-pass" / "KEEP"
             keep.parent.mkdir(parents=True)
             keep.write_text("keep", encoding="utf-8")
