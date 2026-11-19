@@ -13,6 +13,7 @@ USAGE:
     OPERATOR_PASS_API_KEY=jmc_live_... python3 op_api.py call cold-email-linter --input '{"email":"..."}'
     OPERATOR_PASS_API_KEY=jmc_live_... python3 op_api.py call data-atlas-search --input '{"query":"intent data","limit":5}'
     OPERATOR_PASS_API_KEY=jmc_live_... python3 op_api.py call data-atlas-dossier --input '{"slug":"<slug from search>"}'
+    OPERATOR_PASS_API_KEY=jmc_live_... python3 op_api.py call data-atlas-evidence --input '{"query":"how accurate is its job change data","source_slug":"<slug from search>"}'
 
 Zero non-stdlib deps. Uses urllib + json.
 """
