@@ -101,6 +101,7 @@ structured JSON (not LLM-narrated prose).
 |---|---|
 | `data-atlas-search` | Find data sources by text, tag or category. Returns a short list of slugs |
 | `data-atlas-dossier` | The full dossier for one source: coverage, who it fits, pricing reality, what it pairs with, compliance, citations |
+| `data-atlas-evidence` | What practitioners write about a source or a data need: up to 5 short third-party excerpts, each with its source link |
 
 (Full catalog + per-tool input schema at runtime via `/operator-pass list`.)
 
@@ -136,6 +137,7 @@ Detect intent from the user's request:
 | "Score this ad creative" | `ad-creative-scorer` |
 | "Which data source covers <need>?" | `data-atlas-search`, then `data-atlas-dossier` |
 | "Tell me about <data source>" | `data-atlas-dossier` |
+| "What do people say about <data source>?" | `data-atlas-evidence` |
 
 If intent is ambiguous, ask one clarifying question. Don't list tools
 unless the user asks.
@@ -174,11 +176,12 @@ Each tool returns structured JSON. Pretty-print the result, then offer
   `cohort-economics-modeler`): "Want me to run a sensitivity analysis
   on the top 2 levers?"
 
-## Data Atlas: search, then dossier
+## Data Atlas: search, dossier, evidence
 
-Use these two tools when you are choosing where data comes from: a list
+Use these tools when you are choosing where data comes from: a list
 source, an enrichment vendor, a signal feed. Search first, read the
-dossier for the two or three best matches, then pick. Both are read-only.
+dossier for the two or three best matches, then check what practitioners
+say with `data-atlas-evidence` before you pick. All three are read-only.
 
 ### `data-atlas-search`
 
@@ -231,11 +234,40 @@ Treat that as "not in the Atlas yet". Say so, and go back to
 `data-atlas-search` for another match. Do not fill in a dossier
 yourself.
 
+### `data-atlas-evidence`
+
+Inputs:
+
+| Field | Type | Notes |
+|---|---|---|
+| `query` | string, 3-200 chars, required | The data need or question, e.g. `how reliable is its director data` |
+| `source_slug` | string, optional | A slug from `data-atlas-search`, to aim the evidence at one source |
+
+Output:
+
+```
+{
+  "query": "...",
+  "passages": [
+    { "excerpt": "...", "title": "...", "url": "...", "source_type": "...", "published_at": "..." }
+  ],
+  "note": "..."
+}
+```
+
+Up to 5 passages. Each `excerpt` is a short third-party quote (300
+characters or less) with the `url` it came from; `source_type` and
+`published_at` can be null. Quote the excerpt with its link and send the
+user to the source; do not present it as JMC's view or expand it into
+claims the excerpt does not make. An empty `passages` list means the
+knowledge base has nothing on that question: say so.
+
 ### Example
 
 ```bash
 python3 scripts/op_api.py call data-atlas-search --input '{"query":"job change signals","limit":5}'
 python3 scripts/op_api.py call data-atlas-dossier --input '{"slug":"<slug>"}'
+python3 scripts/op_api.py call data-atlas-evidence --input '{"query":"how accurate is its job change data","source_slug":"<slug>"}'
 ```
 
 ## Sub-skills

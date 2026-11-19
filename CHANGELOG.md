@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- `data-atlas-evidence` documented in `operator-pass/SKILL.md` (catalog row, routing, inputs, outputs, how to quote it) with a usage line in `scripts/op_api.py`. `tests/test_atlas_tools_documented.py` checks every Atlas tool is documented.
+
 ## [0.2.2] — 2026-11-08
 
 Copy fixes. No functional changes.
