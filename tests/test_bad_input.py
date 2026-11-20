@@ -71,5 +71,16 @@ class OpApiBadInput(unittest.TestCase):
         self.assertIn("file not found", missing.stderr)
 
 
+    def test_bad_slug_exits_2_before_connect(self):
+        env = os.environ.copy()
+        env["OPERATOR_PASS_API_KEY"] = DUMMY_KEY
+        env.pop("OPERATOR_PASS_BASE_URL", None)
+        for args in (["schema", "../etc/passwd"], ["schema", "Bad_Slug"], ["call", "a/b", "--input", "{}"]):
+            result = run(args, env)
+            self.assertEqual(result.returncode, 2, args)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertNotIn(DUMMY_KEY, result.stderr + result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

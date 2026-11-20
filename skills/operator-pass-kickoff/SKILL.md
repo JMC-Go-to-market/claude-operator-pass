@@ -23,8 +23,8 @@ state = {
     "env_var_set":       bool(os.environ.get("OPERATOR_PASS_API_KEY")),
     "has_brand_config":  file_exists("brand-config.json"),
     "has_soul":          file_exists("SOUL.md"),
-    "key_valid":         api_get("/me") returns 200,
-    "quota_remaining":   parse from /me response,
+    "key_valid":         `op_api.py whoami` exits 0,
+    "quota_remaining":   unknown (no API endpoint reports it),
     "cache_dir_exists":  file_exists(".operator-pass-cache"),
     "recent_calls":      count of entries in usage.jsonl from last 7 days,
 }
@@ -78,7 +78,7 @@ Recent tool usage:
   cold-email-linter      6 calls (Wed batch)
   competitive-teardown   4 calls (Mon prospect research)
   evp-generator          2 calls
-  geo-visibility         2 calls
+  geo-visibility-audit         2 calls
 
 Recommended next:
 - Continue your batch: `/operator-pass call cold-email-linter`

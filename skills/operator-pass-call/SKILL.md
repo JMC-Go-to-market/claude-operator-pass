@@ -2,8 +2,7 @@
 name: operator-pass-call
 description: Invoke a specific JMC API tool by slug. Validates the API key, fetches the per-tool input schema, validates the user's inputs, makes the POST call, and pretty-prints the structured response. Loaded by the main operator-pass skill when the user knows which tool they want.
 user-invocable: false
-allowed-tools: Read Bash WebFetch
-  - Write
+allowed-tools: Read Bash
 license: MIT
 
 ---
@@ -31,23 +30,24 @@ if [ -z "${OPERATOR_PASS_API_KEY:-}" ]; then
 fi
 ```
 
-Or via WebFetch validation:
+Then check the key is accepted (this goes through the member MCP,
+the only place the API answers a key check):
 
-```
-GET https://api.jaymountconsulting.com/v1/me
-Headers: Authorization: Bearer $OPERATOR_PASS_API_KEY
+```bash
+python3 scripts/op_api.py whoami
 ```
 
-Expect 200 with `{ "user_id", "plan", "rate_limit_remaining" }`.
-If 401/403, exit with the subscribe link.
+Exit code 0 means accepted. The API does not report plan, quota or
+expiry, so treat those as unknown. If it fails with 401/403, exit with
+the subscribe link.
 
 ### 2. Fetch the tool's input schema
 
-```
-GET https://api.jaymountconsulting.com/v1/tools/<slug>/schema
+```bash
+python3 scripts/op_api.py schema <slug>
 ```
 
-Returns a JSON Schema describing required inputs. Parse it, compare
+Prints the tool's JSON Schema (read from the member MCP tool list). An unknown slug exits 1 with "unknown tool"; do not guess a schema. It is a JSON Schema describing required inputs. Parse it, compare
 to what the user supplied, and ask for any missing required fields.
 
 ### 3. Validate inputs against the schema

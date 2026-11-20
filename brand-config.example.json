@@ -22,7 +22,7 @@
     "cold_email_validation": "cold-email-linter",
     "evp_generation": "evp-generator",
     "competitive_research": "competitive-teardown",
-    "geo_audit": "geo-visibility",
+    "geo_audit": "geo-visibility-audit",
     "pricing_lab": "pricing-page-lab"
   },
 

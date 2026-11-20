@@ -2,8 +2,7 @@
 name: operator-pass-list
 description: List all available JMC API tools with their slugs, descriptions, and input schemas. Hits the live catalog endpoint so the list is always current. Loaded by the main operator-pass skill when the user asks "what tools are available" or "list the API tools".
 user-invocable: false
-allowed-tools: Bash WebFetch
-  - Read
+allowed-tools: Read Bash
 license: MIT
 
 ---
@@ -30,25 +29,14 @@ The catalog endpoint is authenticated; require a valid key.
 
 ### 2. Fetch the catalog
 
-```
-GET https://api.jaymountconsulting.com/v1/tools
-Headers: Authorization: Bearer $OPERATOR_PASS_API_KEY
+```bash
+python3 scripts/op_api.py list
 ```
 
-Returns an array of tool definitions:
-
-```json
-[
-  {
-    "slug": "cold-email-linter",
-    "name": "Cold Email Linter",
-    "category": "outbound",
-    "description": "Per-email score + line-level rewrite recommendations",
-    "schema": { "type": "object", "properties": { ... }, "required": [ ... ] }
-  },
-  ...
-]
-```
+The list comes from the member MCP tool list (the API has no catalog
+route). Each entry has a `name` (the slug), a `description` and an
+`inputSchema`. There is no category field: group by the sections below
+only for tools you recognise, and list any other tool under "Other".
 
 ### 3. Format the list
 
@@ -72,7 +60,7 @@ description + a "see schema with `--detail`" hint.
 - **`buyer-journey-mapper`** — ICP+pains → 5-stage Schwartz
 
 ## Demand + content
-- **`geo-visibility`** — URL → AI-visibility 5-dim score
+- **`geo-visibility-audit`** — URL → AI-visibility 5-dim score
 - **`competitive-teardown`** — URL → 6-bullet teardown
 - **`paid-media-teardown`** — 5-lever ad creative teardown
 - **`ad-creative-scorer`** — JMC creative framework score
@@ -92,8 +80,8 @@ description + a "see schema with `--detail`" hint.
 If user asks "schema for cold-email-linter" or "detail on
 <slug>", fetch:
 
-```
-GET https://api.jaymountconsulting.com/v1/tools/<slug>/schema
+```bash
+python3 scripts/op_api.py schema <slug>
 ```
 
 And pretty-print the required + optional inputs.

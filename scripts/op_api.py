@@ -7,8 +7,8 @@ fetches the live tool catalog, fetches per-tool schemas, calls tools
 with JSON inputs. Handles 401/402/429/5xx per the brand-config rules.
 
 USAGE:
-    OPERATOR_PASS_API_KEY=jmc_live_... python3 op_api.py whoami
-    OPERATOR_PASS_API_KEY=jmc_live_... python3 op_api.py list
+    OPERATOR_PASS_API_KEY=jmc_live_... python3 op_api.py whoami   # key check, via the member MCP
+    OPERATOR_PASS_API_KEY=jmc_live_... python3 op_api.py list     # tool list, via the member MCP
     OPERATOR_PASS_API_KEY=jmc_live_... python3 op_api.py schema cold-email-linter
     OPERATOR_PASS_API_KEY=jmc_live_... python3 op_api.py call cold-email-linter --input '{"email":"..."}'
     OPERATOR_PASS_API_KEY=jmc_live_... python3 op_api.py call data-atlas-search --input '{"query":"intent data","limit":5}'
@@ -36,6 +36,7 @@ ALLOWED_HOST = "api.jaymountconsulting.com"
 DEFAULT_TIMEOUT_S = 30
 MAX_INPUT_BYTES = 2_000_000
 USER_AGENT = "claude-operator-pass/0.2 (https://github.com/JMC-Go-to-market/claude-operator-pass)"
+SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _PATH_RE = re.compile(r"(?:/[A-Za-z0-9._~-]+)+")
 
 
@@ -130,14 +131,22 @@ def request(
     body: Optional[Dict[str, Any]] = None,
     timeout_s: int = DEFAULT_TIMEOUT_S,
     retry_on_429: bool = True,
+    root: bool = False,
+    raw_body: bool = False,
+    accept: str = "application/json",
 ) -> Dict[str, Any]:
-    """Make an authenticated API request. Returns parsed JSON."""
+    """Make an authenticated API request. Returns parsed JSON.
+
+    root=True resolves path against the API host root (the MCP lives at /mcp,
+    outside /v1). raw_body=True returns the response text unparsed.
+    """
     key = get_key()
-    url = f"{base_url()}{path}"
+    base = base_url()  # always validated, even for root paths
+    url = f"https://{ALLOWED_HOST}{path}" if root else f"{base}{path}"
     headers = {
         "Authorization": f"Bearer {key}",
         "User-Agent": USER_AGENT,
-        "Accept": "application/json",
+        "Accept": accept,
     }
     data = None
     if body is not None:
@@ -153,7 +162,7 @@ def request(
                 return {
                     "ok": True,
                     "status": resp.status,
-                    "data": json.loads(raw) if raw else {},
+                    "data": raw if raw_body else (json.loads(raw) if raw else {}),
                     "rate_remaining": resp.headers.get("X-RateLimit-Remaining"),
                 }
         except urllib.error.HTTPError as err:
@@ -198,50 +207,93 @@ def request(
 
 # ---------------- Commands ----------------
 
-def cmd_whoami() -> int:
-    result = request("GET", "/me")
+def parse_mcp_body(text: str) -> Dict[str, Any]:
+    """Parse an MCP reply: plain JSON, or an SSE stream carrying one JSON message."""
+    text = text.strip()
+    candidates = [text]
+    candidates += [line[5:].strip() for line in text.splitlines() if line.startswith("data:")]
+    for cand in candidates:
+        try:
+            msg = json.loads(cand)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(msg, dict):
+            return msg
+    raise ValueError("MCP reply is not valid JSON")
+
+
+def mcp_tools() -> Optional[Dict[str, Any]]:
+    """tools/list on the member MCP. Returns {"tools": [...], "rate_remaining": ...} or None.
+
+    The REST API has no account, catalog or schema route; the MCP is where the
+    key check, the catalog and each tool's input schema live.
+    """
+    result = request(
+        "POST",
+        "/mcp",
+        body={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+        root=True,
+        raw_body=True,
+        accept="application/json, text/event-stream",
+    )
     if not result["ok"]:
+        return None
+    try:
+        msg = parse_mcp_body(result["data"])
+    except ValueError:
+        sys.stderr.write("ERROR: the MCP reply was not valid JSON\n")
+        return None
+    tools = (msg.get("result") or {}).get("tools")
+    if not isinstance(tools, list):
+        sys.stderr.write("ERROR: the MCP reply was not valid: no tool list\n")
+        return None
+    return {"tools": [t for t in tools if isinstance(t, dict)], "rate_remaining": result.get("rate_remaining")}
+
+
+def cmd_whoami() -> int:
+    listing = mcp_tools()
+    if listing is None:
         return 1
-    data = result["data"]
-    print(f"User:             {data.get('user_id', '—')}")
-    print(f"Plan:             {data.get('plan', '—')}")
-    print(f"Quota remaining:  {data.get('rate_limit_remaining', '—')}")
-    print(f"Pass valid until: {data.get('valid_until', '—')}")
+    print("Key:              accepted")
+    print(f"Tools available:  {len(listing['tools'])} tools")
+    # No endpoint reports the plan, quota or expiry: say unknown, never guess.
+    print("Plan:             unknown (not reported by the API)")
+    print("Quota remaining:  " + (str(listing["rate_remaining"]) if listing["rate_remaining"] else "unknown"))
+    print("Pass valid until: unknown (not reported by the API)")
     return 0
 
 
 def cmd_list() -> int:
-    result = request("GET", "/tools")
-    if not result["ok"]:
+    listing = mcp_tools()
+    if listing is None:
         return 1
-    tools = result["data"].get("tools", result["data"]) if isinstance(result["data"], dict) else result["data"]
-    if not isinstance(tools, list):
-        print(json.dumps(result["data"], indent=2))
-        return 0
-    # Group by category
-    by_cat: Dict[str, list] = {}
-    for t in tools:
-        if not isinstance(t, dict):
-            continue
-        cat = t.get("category", "uncategorized")
-        by_cat.setdefault(cat, []).append(t)
-    for cat, items in by_cat.items():
-        print(f"\n## {cat}")
-        for t in items:
-            print(f"  {t.get('slug', '?').ljust(35)} {t.get('description', '')[:80]}")
+    tools = listing["tools"]
+    for t in sorted(tools, key=lambda x: str(x.get("name", ""))):
+        print(f"  {str(t.get('name', '?')).ljust(35)} {str(t.get('description', ''))[:80]}")
     print(f"\nTotal: {len(tools)} tools")
     return 0
 
 
 def cmd_schema(slug: str) -> int:
-    result = request("GET", f"/tools/{urllib.parse.quote(slug)}/schema")
-    if not result["ok"]:
+    check_slug(slug)
+    listing = mcp_tools()
+    if listing is None:
         return 1
-    print(json.dumps(result["data"], indent=2))
-    return 0
+    for t in listing["tools"]:
+        if t.get("name") == slug:
+            print(json.dumps(t.get("inputSchema", {}), indent=2))
+            return 0
+    sys.stderr.write(f"error: unknown tool: {slug}\n")
+    return 1
+
+
+def check_slug(slug: str) -> None:
+    if not SLUG_RE.fullmatch(slug):
+        fail_input("tool slug must be lowercase letters, digits and hyphens")
 
 
 def cmd_call(slug: str, inputs: Dict[str, Any]) -> int:
+    check_slug(slug)
     result = request("POST", f"/tools/{urllib.parse.quote(slug)}", body=inputs)
     if not result["ok"]:
         return 1
@@ -254,8 +306,8 @@ def cmd_call(slug: str, inputs: Dict[str, Any]) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("whoami", help="Validate API key + show plan + quota")
-    sub.add_parser("list", help="Fetch live tool catalog")
+    sub.add_parser("whoami", help="Check the API key is accepted (via the member MCP)")
+    sub.add_parser("list", help="List the tools your key can call (via the member MCP)")
     p_schema = sub.add_parser("schema", help="Fetch schema for a tool")
     p_schema.add_argument("slug")
     p_call = sub.add_parser("call", help="Call a tool with JSON inputs")

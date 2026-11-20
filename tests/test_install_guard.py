@@ -114,5 +114,27 @@ class OperatorPassInstallGuard(unittest.TestCase):
             self.assertEqual(keep.read_text(encoding="utf-8"), "keep")
 
 
+    def test_data_atlas_skill_installs_with_references(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            home = root / "home"
+            home.mkdir()
+            make_repo(repo, "clean")
+            atlas = repo / "skills" / "operator-pass-data-atlas"
+            (atlas / "references").mkdir(parents=True)
+            (atlas / "SKILL.md").write_text("---\nname: operator-pass-data-atlas\n---\n", encoding="utf-8")
+            (atlas / "references" / "mcp-setup.md").write_text("setup", encoding="utf-8")
+            git(repo, "add", "-A")
+            git(repo, "commit", "-q", "-m", "atlas")
+            script = root / "install.sh"
+            installer(repo, script)
+            result = invoke(script, home)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            base = home / ".claude" / "skills" / "operator-pass-data-atlas"
+            self.assertTrue((base / "SKILL.md").is_file())
+            self.assertTrue((base / "references" / "mcp-setup.md").is_file())
+
+
 if __name__ == "__main__":
     unittest.main()

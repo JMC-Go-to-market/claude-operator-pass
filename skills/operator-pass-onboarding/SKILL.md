@@ -44,20 +44,19 @@ continue setup.
 ### Step 2 — Validate the key
 
 ```bash
-curl -s https://api.jaymountconsulting.com/v1/me \
-  -H "Authorization: Bearer $OPERATOR_PASS_API_KEY"
+python3 scripts/op_api.py whoami
 ```
 
 If 401/403, surface: "Key invalid or expired. Renew at
 jaymountconsulting.com/operator-pass." Stop.
 
-If 200, parse `{ user_id, plan, rate_limit_remaining }` and continue.
+If it prints "Key: accepted", continue. Plan, quota and expiry are not
+reported by the API: record them as unknown, never as a number.
 
 ### Step 3 — Fetch the live tool catalog
 
 ```bash
-curl -s https://api.jaymountconsulting.com/v1/tools \
-  -H "Authorization: Bearer $OPERATOR_PASS_API_KEY"
+python3 scripts/op_api.py list
 ```
 
 Show the operator the catalog grouped by category:
@@ -87,7 +86,7 @@ The skill defaults the most-popular operator picks. Override as needed:
 - cold_email_validation: cold-email-linter
 - evp_generation: evp-generator
 - competitive_research: competitive-teardown
-- geo_audit: geo-visibility
+- geo_audit: geo-visibility-audit
 - pricing_lab: pricing-page-lab
 ```
 

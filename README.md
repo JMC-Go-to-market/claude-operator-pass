@@ -58,7 +58,7 @@ graph TB
 
 Verified:
 - Without API key → graceful error + subscribe URL, exit 2
-- With key → validates against `/me`, fetches catalog, groups by category
+- With key → checks the key through the member MCP, lists the tool catalog
 
 ## The 3-tier config
 
@@ -137,7 +137,7 @@ groups its tools into categories, for example:
 - `offer-lever-scorer` — 5-lever offer score
 
 ### Demand
-- `geo-visibility` — URL → AI-visibility 5-dim score
+- `geo-visibility-audit` — URL → AI-visibility 5-dim score
 - `competitive-teardown` — URL → 6-bullet teardown
 - `paid-media-teardown` — 5-lever ad teardown
 - `ad-creative-scorer` — JMC creative framework score

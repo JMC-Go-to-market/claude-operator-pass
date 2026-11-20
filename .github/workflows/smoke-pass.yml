@@ -1,5 +1,5 @@
 # Operator Pass API smoke
-# Confirms api.jaymountconsulting.com /me responds + tools catalog is reachable.
+# Confirms api.jaymountconsulting.com key check + tool list (member MCP) respond.
 # Only deployed in claude-operator-pass.
 #
 # Manual-only until Pass unlocks (commercial HOLD). Nightly schedule stays
@@ -15,7 +15,7 @@ on:
 
 jobs:
   smoke:
-    name: Hit /me + /tools
+    name: Key check + tool list
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

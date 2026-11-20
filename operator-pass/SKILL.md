@@ -14,7 +14,6 @@ description: >
   tool", "agent-callable tool", "data atlas", "which data source covers",
   "compare data vendors", "pick an enrichment source".
 allowed-tools: Read Bash WebFetch
-  - Write
 license: MIT
 
 ---
@@ -80,7 +79,7 @@ structured JSON (not LLM-narrated prose).
 
 | Tool slug | What it does |
 |---|---|
-| `geo-visibility` | URL → 5-dim AI-visibility score + ranked fixes |
+| `geo-visibility-audit` | URL → 5-dim AI-visibility score + ranked fixes |
 | `competitive-teardown` | URL → 6-bullet positioning teardown |
 | `paid-media-teardown` | 5-lever ad creative teardown |
 | `ad-creative-scorer` | Score against the JMC creative framework |
@@ -108,14 +107,17 @@ structured JSON (not LLM-narrated prose).
 
 ### 1. Validate the API key
 
-On first call, validate:
+Make this the first call of every session. It checks the key through
+the member MCP, because the API has no separate account route:
 
 ```bash
-curl -s https://api.jaymountconsulting.com/v1/me \
-  -H "Authorization: Bearer $OPERATOR_PASS_API_KEY"
+python3 scripts/op_api.py whoami
 ```
 
-If 401 or 403, surface:
+It prints `Key: accepted` on success. The API does not report plan,
+quota or expiry, so those print as unknown; never state them as facts.
+
+If it fails with 401 or 403, surface:
 
 > Your Operator Pass API key is missing / expired / invalid.
 > Get or renew at https://jaymountconsulting.com/operator-pass.
@@ -130,7 +132,7 @@ Detect intent from the user's request:
 | "Critique this LinkedIn post" | `linkedin-post-critic` |
 | "Generate an EVP" | `evp-generator` |
 | "Build an EVP brief" | `evp-brief-generator` |
-| "GEO audit on <URL>" | `geo-visibility` |
+| "GEO audit on <URL>" | `geo-visibility-audit` |
 | "Competitive teardown of <URL>" | `competitive-teardown` |
 | "Run the pipeline math" | `blended-gtm-dashboard` |
 | "Score this ad creative" | `ad-creative-scorer` |
@@ -142,13 +144,13 @@ unless the user asks.
 
 ### 3. Gather the inputs per tool schema
 
-Each tool publishes its input schema at:
+Each tool's input schema is in the member MCP tool list. Read it with:
 
-```
-GET https://api.jaymountconsulting.com/v1/tools/<slug>/schema
+```bash
+python3 scripts/op_api.py schema <slug>
 ```
 
-Fetch the schema, validate the user's inputs against it, and ask for
+Read the schema, validate the user's inputs against it, and ask for
 any missing required fields.
 
 ### 4. Call the tool
@@ -165,7 +167,7 @@ curl -s -X POST "https://api.jaymountconsulting.com/v1/tools/<slug>" \
 Each tool returns structured JSON. Pretty-print the result, then offer
 "the next step" — usually:
 
-- For audit tools (`geo-visibility`, `cold-email-linter`,
+- For audit tools (`geo-visibility-audit`, `cold-email-linter`,
   `competitive-teardown`): "Want me to draft the fix for the top
   issue?"
 - For generator tools (`evp-generator`, `nurture-sequence-planner`):
@@ -242,6 +244,7 @@ python3 scripts/op_api.py call data-atlas-dossier --input '{"slug":"<slug>"}'
 
 - [`skills/operator-pass-call`](../skills/operator-pass-call) — invoke a specific tool by slug
 - [`skills/operator-pass-list`](../skills/operator-pass-list) — list available tools + schemas
+- [`skills/operator-pass-data-atlas`](../skills/operator-pass-data-atlas) — member Data Atlas, cited with last-checked dates
 
 ## Rate limits + costs
 

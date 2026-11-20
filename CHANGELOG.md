@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+- `mcpServers` block for the member MCP, with the key read from `OPERATOR_PASS_API_KEY`.
+- `operator-pass-data-atlas` skill and per-agent MCP setup (Claude Code, Codex, Cursor, Claude Desktop, others).
+- Key check as the first call (`op_api.py whoami`).
+
+### Fixed
+- `whoami`, `list` and `schema` used routes the API does not serve; they now go through the member MCP. Plan and quota print as unknown.
+- `geo-visibility` is `geo-visibility-audit`.
+- Dropped the unused Write permission from the call and main skills.
+
 ## [0.2.2] — 2026-11-08
 
 Copy fixes. No functional changes.
