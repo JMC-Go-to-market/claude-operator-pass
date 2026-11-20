@@ -54,12 +54,26 @@ class McpWiring(unittest.TestCase):
 
 
 class NoInternalLeak(unittest.TestCase):
-    def test_no_internal_server_or_repo_names(self):
-        pat = re.compile(r"(?i)knowledge[- ]?mcp|content[- ]?mcp|tools[- ]?mcp|jmc-ops|gtm-context|internal (knowledge|content) server")
+    """Public repo: only the API host, the public site and this repo may be named."""
+
+    HOST = re.compile(r"(?i)\b(?:[a-z0-9-]+\.)+jaymountconsulting\.com\b")
+    REPO = re.compile(r"(?i)github\.com/JMC-Go-to-market/([A-Za-z0-9._-]+)")
+    ALLOWED_HOSTS = {"api.jaymountconsulting.com", "jaymountconsulting.com", "www.jaymountconsulting.com"}
+
+    def test_only_allowed_hosts(self):
         hits = []
         for f in text_files():
-            for m in pat.finditer(f.read_text()):
-                hits.append(f"{f.relative_to(ROOT)}: {m.group(0)}")
+            for m in self.HOST.finditer(f.read_text()):
+                if m.group(0).lower() not in self.ALLOWED_HOSTS:
+                    hits.append(f"{f.relative_to(ROOT)}: {m.group(0)}")
+        self.assertEqual(hits, [])
+
+    def test_only_this_repo_is_linked(self):
+        hits = []
+        for f in text_files():
+            for m in self.REPO.finditer(f.read_text()):
+                if m.group(1).lower().removesuffix(".git") != "claude-operator-pass":
+                    hits.append(f"{f.relative_to(ROOT)}: {m.group(0)}")
         self.assertEqual(hits, [])
 
 
