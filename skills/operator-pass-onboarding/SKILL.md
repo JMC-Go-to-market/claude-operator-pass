@@ -44,23 +44,27 @@ continue setup.
 ### Step 2 — Validate the key
 
 ```bash
-curl -s https://api.jaymountconsulting.com/v1/me \
-  -H "Authorization: Bearer $OPERATOR_PASS_API_KEY"
+python3 scripts/op_api.py whoami
 ```
 
-If 401/403, surface: "Key invalid or expired. Renew at
-jaymountconsulting.com/operator-pass." Stop.
-
-If 200, parse `{ user_id, plan, rate_limit_remaining }` and continue.
+This first-call check sends authenticated `tools/list` to `/mcp`, without
+executing a tool. On 401/402, show the renewal link and stop. Protocol/network
+errors also stop setup. Success checks access only; identity, plan, validity
+and quota remain unknown. Never display any part of the key.
 
 ### Step 3 — Fetch the live tool catalog
 
+Use the successful discovery response, or:
+
 ```bash
-curl -s https://api.jaymountconsulting.com/v1/tools \
-  -H "Authorization: Bearer $OPERATOR_PASS_API_KEY"
+python3 scripts/op_api.py list
 ```
 
-Show the operator the catalog grouped by category:
+Read `name` and `inputSchema` from the member MCP catalog. The plugin wires
+the Pass key via the environment placeholder in `.mcp.json`. Prefer connected
+MCP tools; REST execution remains a fallback.
+
+Show names and descriptions; group by category only when returned:
 
 ```
 # Operator Pass API tools — <N> available
@@ -107,7 +111,7 @@ Save to `SOUL.md`.
 ```
 How should the skill handle failures?
 
-  429 (rate-limited):     Retry once (default) / Retry twice / Surface immediately
+  429 (rate-limited):     Retry once (default) / Surface immediately
   402 (sub-expired):      Surface + stop (always — non-overridable)
   401 (key invalid):      Surface + stop (always — non-overridable)
   5xx (API error):        Log + skip / Retry once / Surface immediately

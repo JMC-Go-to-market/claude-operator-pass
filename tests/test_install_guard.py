@@ -37,6 +37,9 @@ def make_repo(repo: Path, kind: str) -> None:
         good = skills / "operator-pass-list"
         good.mkdir()
         (good / "SKILL.md").write_text("---\nname: operator-pass-list\n---\n", encoding="utf-8")
+    atlas = skills / "gtm-data-atlas"
+    atlas.mkdir()
+    (atlas / "SKILL.md").write_text("---\nname: gtm-data-atlas\n---\n", encoding="utf-8")
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "fixture")
 
@@ -78,6 +81,8 @@ class OperatorPassInstallGuard(unittest.TestCase):
             self.assertTrue(
                 (home / ".claude" / "skills" / "operator-pass-list" / "SKILL.md").is_file()
             )
+
+            self.assertTrue((home / ".claude" / "skills" / "gtm-data-atlas" / "SKILL.md").is_file())
 
     def test_symlink_refuses_before_delete(self):
         with tempfile.TemporaryDirectory() as tmp:

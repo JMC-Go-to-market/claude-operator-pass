@@ -41,7 +41,7 @@ graph TB
     style F fill:#1a1a2e,stroke:#00d4ff
 ```
 
-## The 4 sub-skills
+## Sub-skills
 
 | Sub-skill | What it does |
 |---|---|
@@ -49,6 +49,7 @@ graph TB
 | `operator-pass-onboarding` | First-run setup → validates key, fetches catalog, captures preferred tools + failure handling |
 | `operator-pass-call` | Invoke a specific tool by slug — validates inputs against the schema before calling |
 | `operator-pass-list` | Live catalog list with slugs + descriptions + per-tool schemas |
+| `gtm-data-atlas` | Member source selection with dated citations and explicit unknowns |
 
 ## The deterministic script
 
@@ -58,7 +59,8 @@ graph TB
 
 Verified:
 - Without API key → graceful error + subscribe URL, exit 2
-- With key → validates against `/me`, fetches catalog, groups by category
+- With a key → authenticated `/mcp` discovery; account identity and quota remain unknown
+- Offline regression tests cover discovery errors, schema selection and pagination
 
 ## The 3-tier config
 
@@ -76,6 +78,32 @@ AGENTS.md           ← Never call anonymously, never fabricate results, never r
 /plugin marketplace add JMC-Go-to-market/claude-operator-pass
 /plugin install operator-pass
 ```
+
+### Member MCP connection
+
+The plugin's root `.mcp.json` wires the member HTTP server at
+`https://api.jaymountconsulting.com/mcp`, using
+`Authorization: Bearer ${OPERATOR_PASS_API_KEY}`. Set the variable in the
+launching environment, then restart Claude Code. Never put a literal key in
+configuration or commit one. Use the connected MCP tools as the main path.
+
+For the first-call access check, run from this repository checkout:
+
+```bash
+python3 scripts/op_api.py whoami
+python3 scripts/op_api.py list
+python3 scripts/op_api.py schema data-atlas-search
+```
+
+These commands use authenticated JSON-RPC `tools/list`; they do not execute
+a tool. `whoami` reports discovery access, with identity, plan, expiry and
+quota unknown. A failed check stops the workflow. Tool schemas come from
+`inputSchema` in discovery; there are no REST discovery/schema calls.
+
+The one-line installer below installs skills only. For MCP wiring use the
+plugin installation above, or copy this repository's `.mcp.json` server
+entry into your runtime's MCP configuration. CLI examples require this
+repository checkout; the skill-only installation does not install the CLI.
 
 ### One-line install
 
@@ -104,7 +132,8 @@ export OPERATOR_PASS_API_KEY="jmc_live_..."
 ```
 
 → Routes to `operator-pass-call` → fetches `cold-email-linter` schema
-→ validates inputs → POSTs to API → pretty-prints structured response.
+→ validates inputs → calls the member MCP tool (REST as fallback)
+→ presents the returned summary first, with status, evidence and unknowns.
 
 ```
 > What tools are available?

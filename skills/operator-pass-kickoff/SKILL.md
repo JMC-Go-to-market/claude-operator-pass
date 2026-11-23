@@ -23,8 +23,8 @@ state = {
     "env_var_set":       bool(os.environ.get("OPERATOR_PASS_API_KEY")),
     "has_brand_config":  file_exists("brand-config.json"),
     "has_soul":          file_exists("SOUL.md"),
-    "key_valid":         api_get("/me") returns 200,
-    "quota_remaining":   parse from /me response,
+    "key_valid":         authenticated MCP tools/list succeeds,
+    "quota_remaining":   unknown unless explicitly returned,
     "cache_dir_exists":  file_exists(".operator-pass-cache"),
     "recent_calls":      count of entries in usage.jsonl from last 7 days,
 }
@@ -35,9 +35,9 @@ state = {
 | `!env_var_set` | "Set OPERATOR_PASS_API_KEY. Subscribe at jaymountconsulting.com/operator-pass." |
 | `env_var_set AND !key_valid` | "Key invalid or expired. Renew at jaymountconsulting.com/operator-pass." |
 | `key_valid AND !has_brand_config OR !has_soul` | `operator-pass-onboarding` |
-| `quota_remaining < 20%` | "⚠ Only X% quota remaining. Proceed carefully or upgrade." |
+| Known quota below `usage.warn_at_remaining_quota_percent` | "⚠ Only X% quota remaining. Proceed carefully or upgrade." |
 | `recent_calls == 0` | "No calls in the last 7 days. Want to try a sample call? `/operator-pass call cold-email-linter`" |
-| else | "API ready. <quota>% quota. <N> recent calls. What do you want to do?" |
+| else | "API discovery ready. Quota unknown unless returned. <N> recent calls." |
 ```
 
 ## Welcome flow
@@ -66,9 +66,9 @@ Then re-run /operator-pass and I'll walk you through setup.
 ```
 # Operator Pass status
 
-API key:           ✓ Valid (jmc_live_xxxxxx_xxxx... — last 4)
-Plan:              Operator Pass
-Quota remaining:   847 / 1000 calls this month (84.7%)
+API key:           ✓ Authenticated discovery (key never displayed)
+Plan:              Unknown
+Quota remaining:   Unknown (discovery returns no quota)
 Brand config:      ✓ brand-config.json (5 preferred tools)
 SOUL:              ✓ SOUL.md
 Cache:             ✓ .operator-pass-cache (catalog cached 2 minutes ago)

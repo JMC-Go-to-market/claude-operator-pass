@@ -61,7 +61,7 @@ name_list=""
 if [[ -d "$TEMP_DIR/operator-pass" ]]; then
   name_list="operator-pass"
 fi
-for skill_dir in "$TEMP_DIR/skills"/operator-pass-*; do
+for skill_dir in "$TEMP_DIR/skills"/operator-pass-* "$TEMP_DIR/skills"/gtm-data-atlas; do
   if [[ -d "$skill_dir" ]]; then
     name_list="${name_list}"$'\n'"$(basename "$skill_dir")"
   fi
@@ -76,7 +76,7 @@ done <<< "$name_list"
 if [[ -d "$TEMP_DIR/operator-pass" ]]; then
   install_one "$TEMP_DIR/operator-pass" "operator-pass"
 fi
-for skill_dir in "$TEMP_DIR/skills"/operator-pass-*; do
+for skill_dir in "$TEMP_DIR/skills"/operator-pass-* "$TEMP_DIR/skills"/gtm-data-atlas; do
   if [[ -d "$skill_dir" ]]; then
     install_one "$skill_dir" "$(basename "$skill_dir")"
   fi

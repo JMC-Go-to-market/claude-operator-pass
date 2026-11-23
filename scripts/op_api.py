@@ -28,7 +28,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 
 DEFAULT_BASE_URL = "https://api.jaymountconsulting.com/v1"
@@ -124,20 +124,104 @@ def read_input_file(path: str) -> Dict[str, Any]:
     return read_json_object(text)
 
 
+def sse_chunks(resp: Any) -> Callable[[], bytes]:
+    """Return a reader that yields bytes as soon as they arrive (b"" at the end)."""
+    read1 = getattr(resp, "read1", None)
+    if callable(read1):
+        return lambda: read1(65536)
+    return lambda: resp.read(1)
+
+
+def read_sse_response(read_chunk: Callable[[], bytes], want_id: Any) -> Optional[Dict[str, Any]]:
+    """Read a text/event-stream incrementally and return the JSON-RPC response with id want_id.
+
+    Lines end at CR, LF or CRLF; one leading UTF-8 BOM is dropped. Returns as
+    soon as the matching response (result or error) arrives, so a stream the
+    server keeps open does not block. Notifications, requests and comments are
+    skipped. Returns None when the stream ends without a matching response or
+    an event's data is not JSON.
+    """
+    buf = b""
+    total = 0
+    first = True
+    skip_lf = False
+    data_lines: list = []
+
+    def dispatch() -> Optional[Dict[str, Any]]:
+        try:
+            message = json.loads("\n".join(data_lines))
+        except json.JSONDecodeError:
+            raise ValueError("invalid event data")
+        if (
+            isinstance(message, dict)
+            and "method" not in message
+            and message.get("id") == want_id
+            and ("result" in message or "error" in message)
+        ):
+            return message
+        return None
+
+    try:
+        while True:
+            chunk = read_chunk()
+            eof = not chunk
+            total += len(chunk)
+            if total > MAX_INPUT_BYTES:
+                return None
+            buf += chunk
+            if first and len(buf) >= 3 or first and eof:
+                if buf.startswith(b"\xef\xbb\xbf"):
+                    buf = buf[3:]
+                first = False
+            elif first:
+                continue
+            while True:
+                # A CR at the end of a chunk may be the first half of CRLF: keep
+                # waiting until the next byte arrives before deciding.
+                if skip_lf and buf:
+                    if buf[:1] == b"\n":
+                        buf = buf[1:]
+                    skip_lf = False
+                cut = min((i for i in (buf.find(b"\r"), buf.find(b"\n")) if i >= 0), default=-1)
+                if cut < 0:
+                    break
+                line = buf[:cut].decode("utf-8", errors="ignore")
+                skip_lf = buf[cut:cut + 1] == b"\r"
+                buf = buf[cut + 1:]
+                if line:
+                    if line.startswith("data:"):
+                        value = line[5:]
+                        data_lines.append(value[1:] if value.startswith(" ") else value)
+                    continue
+                if data_lines:
+                    message = dispatch()
+                    data_lines = []
+                    if message is not None:
+                        return message
+            if eof:
+                # An unterminated final event is discarded, as the SSE standard requires.
+                return None
+    except ValueError:
+        return None
+
+
 def request(
     method: str,
     path: str,
     body: Optional[Dict[str, Any]] = None,
     timeout_s: int = DEFAULT_TIMEOUT_S,
     retry_on_429: bool = True,
+    api_root: bool = False,
 ) -> Dict[str, Any]:
     """Make an authenticated API request. Returns parsed JSON."""
     key = get_key()
-    url = f"{base_url()}{path}"
+    base = base_url()  # validate the configured host before constructing either route
+    url = f"https://{ALLOWED_HOST}{path}" if api_root else f"{base}{path}"
     headers = {
         "Authorization": f"Bearer {key}",
         "User-Agent": USER_AGENT,
-        "Accept": "application/json",
+        "Accept": "application/json, text/event-stream" if api_root else "application/json",
+        **({"MCP-Protocol-Version": "2025-06-18"} if api_root else {}),
     }
     data = None
     if body is not None:
@@ -149,11 +233,25 @@ def request(
         req = urllib.request.Request(url, data=data, method=method, headers=headers)
         try:
             with opener.open(req, timeout=timeout_s) as resp:
-                raw = resp.read().decode("utf-8", errors="ignore")
+                ctype = resp.headers.get("Content-Type") if resp.headers is not None else None
+                ctype = ctype.split(";", 1)[0].strip().lower() if isinstance(ctype, str) else ""
+                if api_root and ctype == "text/event-stream":
+                    want_id = body.get("id") if isinstance(body, dict) else None
+                    parsed = read_sse_response(sse_chunks(resp), want_id)
+                    if parsed is None:
+                        sys.stderr.write("ERROR protocol: event stream has no matching JSON-RPC response\n")
+                        return {"ok": False, "status": resp.status, "data": {"error": "invalid_sse"}}
+                else:
+                    raw = resp.read().decode("utf-8", errors="ignore")
+                    try:
+                        parsed = json.loads(raw) if raw else {}
+                    except json.JSONDecodeError:
+                        sys.stderr.write("ERROR protocol: API response is not JSON\n")
+                        return {"ok": False, "status": resp.status, "data": {"error": "invalid_json"}}
                 return {
                     "ok": True,
                     "status": resp.status,
-                    "data": json.loads(raw) if raw else {},
+                    "data": parsed,
                     "rate_remaining": resp.headers.get("X-RateLimit-Remaining"),
                 }
         except urllib.error.HTTPError as err:
@@ -198,68 +296,137 @@ def request(
 
 # ---------------- Commands ----------------
 
+def discover_tools() -> Optional[list]:
+    """Authenticated stateless member MCP discovery (not a tool execution)."""
+    tools = []
+    cursor = None
+    seen = set()
+    for _ in range(100):
+        result = request("POST", "/mcp", body={
+            "jsonrpc": "2.0", "id": 1, "method": "tools/list",
+            "params": {} if cursor is None else {"cursor": cursor},
+        }, api_root=True)
+        if not result["ok"]:
+            return None
+        data = result.get("data")
+        if not isinstance(data, dict) or data.get("jsonrpc") != "2.0" or data.get("id") != 1:
+            sys.stderr.write("ERROR MCP: invalid JSON-RPC response\n")
+            return None
+        if "error" in data:
+            # A remote error is data, not a successful empty catalog.
+            sys.stderr.write("ERROR MCP: " + json.dumps(data["error"]).replace(get_key(), "[redacted]") + "\n")
+            return None
+        page = data.get("result")
+        if not isinstance(page, dict) or not isinstance(page.get("tools"), list):
+            sys.stderr.write("ERROR MCP: missing tools array\n")
+            return None
+        for tool in page["tools"]:
+            if not isinstance(tool, dict) or not isinstance(tool.get("name"), str) or not tool["name"] or not isinstance(tool.get("inputSchema"), dict):
+                sys.stderr.write("ERROR MCP: invalid tool definition\n")
+                return None
+        tools.extend(page["tools"])
+        cursor = page.get("nextCursor")
+        if cursor is None:
+            return tools
+        if not isinstance(cursor, str) or not cursor or cursor in seen:
+            sys.stderr.write("ERROR MCP: invalid or repeated pagination cursor\n")
+            return None
+        seen.add(cursor)
+    sys.stderr.write("ERROR MCP: discovery page limit exceeded\n")
+    return None
+
+
 def cmd_whoami() -> int:
-    result = request("GET", "/me")
-    if not result["ok"]:
+    tools = discover_tools()
+    if tools is None:
         return 1
-    data = result["data"]
-    print(f"User:             {data.get('user_id', '—')}")
-    print(f"Plan:             {data.get('plan', '—')}")
-    print(f"Quota remaining:  {data.get('rate_limit_remaining', '—')}")
-    print(f"Pass valid until: {data.get('valid_until', '—')}")
+    print(f"Authenticated MCP discovery: OK ({len(tools)} tools)")
+    print("Identity, plan, validity and quota: unknown (not returned by discovery)")
     return 0
 
 
 def cmd_list() -> int:
-    result = request("GET", "/tools")
-    if not result["ok"]:
+    tools = discover_tools()
+    if tools is None:
         return 1
-    tools = result["data"].get("tools", result["data"]) if isinstance(result["data"], dict) else result["data"]
-    if not isinstance(tools, list):
-        print(json.dumps(result["data"], indent=2))
-        return 0
-    # Group by category
-    by_cat: Dict[str, list] = {}
-    for t in tools:
-        if not isinstance(t, dict):
-            continue
-        cat = t.get("category", "uncategorized")
-        by_cat.setdefault(cat, []).append(t)
-    for cat, items in by_cat.items():
-        print(f"\n## {cat}")
-        for t in items:
-            print(f"  {t.get('slug', '?').ljust(35)} {t.get('description', '')[:80]}")
+    for tool in tools:
+        print(f"  {tool['name'].ljust(35)} {tool.get('description', '')[:80]}")
     print(f"\nTotal: {len(tools)} tools")
     return 0
 
 
 def cmd_schema(slug: str) -> int:
-    result = request("GET", f"/tools/{urllib.parse.quote(slug)}/schema")
-    if not result["ok"]:
+    tools = discover_tools()
+    if tools is None:
         return 1
-    print(json.dumps(result["data"], indent=2))
-    return 0
+    for tool in tools:
+        if tool["name"] == slug:
+            print(json.dumps(tool["inputSchema"], indent=2))
+            return 0
+    sys.stderr.write("ERROR: tool not in member catalog; run /operator-pass list\n")
+    return 1
 
 
-def cmd_call(slug: str, inputs: Dict[str, Any]) -> int:
-    result = request("POST", f"/tools/{urllib.parse.quote(slug)}", body=inputs)
+def print_result(data: Any) -> None:
+    """Render returned fields, without synthesizing or rewriting an envelope."""
+    def render(value: Any, indent: str = "") -> None:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                print(f"{indent}{key}:", end="")
+                if isinstance(item, (dict, list)):
+                    print()
+                    render(item, indent + "  ")
+                else:
+                    print(" " + scalar(item))
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, (dict, list)):
+                    print(indent + "-")
+                    render(item, indent + "  ")
+                else:
+                    print(indent + "- " + scalar(item))
+            if not value:
+                print(indent + "(none returned)")
+        else:
+            print(indent + scalar(value))
+
+    def scalar(value: Any) -> str:
+        if value is None:
+            return "null"
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        return str(value)
+
+    if isinstance(data, dict) and isinstance(data.get("summary"), str):
+        print(data["summary"])
+        render({key: value for key, value in data.items() if key != "summary"})
+    else:
+        render(data)
+
+
+def cmd_call(slug: str, inputs: Dict[str, Any], raw: bool = False) -> int:
+    result = request("POST", f"/tools/{urllib.parse.quote(slug, safe='')}", body=inputs)
     if not result["ok"]:
         return 1
-    print(json.dumps(result["data"], indent=2))
+    if raw:
+        print(json.dumps(result["data"], indent=2))
+    else:
+        print_result(result["data"])
     if result.get("rate_remaining"):
         sys.stderr.write(f"(rate_remaining: {result['rate_remaining']})\n")
-    return 0
+    return 1 if isinstance(result["data"], dict) and result["data"].get("status") == "error" else 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("whoami", help="Validate API key + show plan + quota")
+    sub.add_parser("whoami", help="Check authenticated MCP discovery (account/quota unknown)")
     sub.add_parser("list", help="Fetch live tool catalog")
     p_schema = sub.add_parser("schema", help="Fetch schema for a tool")
     p_schema.add_argument("slug")
     p_call = sub.add_parser("call", help="Call a tool with JSON inputs")
     p_call.add_argument("slug")
+    p_call.add_argument("--raw", action="store_true", help="Print unmodified response as JSON")
     p_call.add_argument("--input", default="{}", help="JSON input")
     p_call.add_argument("--input-file", default=None, help="Path to JSON input file")
 
@@ -278,7 +445,7 @@ def main() -> int:
             if len(args.input.encode("utf-8")) > MAX_INPUT_BYTES:
                 fail_input("input is too large")
             inputs = read_json_object(args.input)
-        return cmd_call(args.slug, inputs)
+        return cmd_call(args.slug, inputs, raw=args.raw)
     return 2
 
 

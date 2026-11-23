@@ -3,7 +3,6 @@ name: operator-pass-call
 description: Invoke a specific JMC API tool by slug. Validates the API key, fetches the per-tool input schema, validates the user's inputs, makes the POST call, and pretty-prints the structured response. Loaded by the main operator-pass skill when the user knows which tool they want.
 user-invocable: false
 allowed-tools: Read Bash WebFetch
-  - Write
 license: MIT
 
 ---
@@ -31,24 +30,22 @@ if [ -z "${OPERATOR_PASS_API_KEY:-}" ]; then
 fi
 ```
 
-Or via WebFetch validation:
-
-```
-GET https://api.jaymountconsulting.com/v1/me
-Headers: Authorization: Bearer $OPERATOR_PASS_API_KEY
-```
-
-Expect 200 with `{ "user_id", "plan", "rate_limit_remaining" }`.
-If 401/403, exit with the subscribe link.
+On first setup run `python3 scripts/op_api.py whoami`: authenticated
+MCP discovery, with no tool execution. Stop on failure. Account identity
+and quota stay unknown unless explicitly returned. Load `brand-config.json`
+and `SOUL.md`, routing to onboarding if missing. Respect the won't-call list
+and confirm before sending customer data.
 
 ### 2. Fetch the tool's input schema
 
-```
-GET https://api.jaymountconsulting.com/v1/tools/<slug>/schema
+Use the connected member MCP catalog, or the REST fallback helper:
+
+```bash
+python3 scripts/op_api.py schema <slug>
 ```
 
-Returns a JSON Schema describing required inputs. Parse it, compare
-to what the user supplied, and ask for any missing required fields.
+This reads `inputSchema` from `/mcp` `tools/list`, selecting the exact name.
+Stop if the tool or schema is absent. Cache discovery per brand-config TTLs.
 
 ### 3. Validate inputs against the schema
 
@@ -62,6 +59,8 @@ If any required input is missing, ask:
 
 ### 4. Call the API
 
+Prefer the connected member MCP tool. REST fallback:
+
 ```bash
 curl -sS -X POST "https://api.jaymountconsulting.com/v1/tools/<slug>" \
   -H "Authorization: Bearer $OPERATOR_PASS_API_KEY" \
@@ -74,7 +73,7 @@ curl -sS -X POST "https://api.jaymountconsulting.com/v1/tools/<slug>" \
 | Status | Meaning | Action |
 |---|---|---|
 | 200 | Success | Pretty-print the JSON result + offer next step |
-| 400 | Bad input | Surface the validation error + retry with corrected input |
+| 400 | Bad input | Surface validation error; ask before a corrected call |
 | 401 | Invalid key | Tell user to renew via /operator-pass |
 | 402 | Subscription expired | Tell user to renew |
 | 429 | Rate-limited | Surface the retry-after header value |
@@ -82,20 +81,12 @@ curl -sS -X POST "https://api.jaymountconsulting.com/v1/tools/<slug>" \
 
 ### 6. Pretty-print + offer next step
 
-Don't dump raw JSON unless asked. Convert to a human-readable summary:
-
-```markdown
-# <Tool name> result
-
-<one-paragraph summary of what was returned>
-
-## Key findings
-<bulleted list>
-
-## Suggested next step
-<one specific action — e.g., "Want me to draft the fix?" or "Want to
-run the same call with <variation>?">
-```
+Follow the result presentation contract in `operator-pass/SKILL.md`:
+summary first, preserve server status, confidence basis, unknowns, assumptions,
+evidence, limits and receipt, then the single returned next_action. Never
+route from model_self_report or invent missing fields. CLI defaults to readable
+output; `--raw` preserves the response when requested. Ask before an additional
+execution call; do not automatically retry validation failures.
 
 ## Common errors + their handling
 

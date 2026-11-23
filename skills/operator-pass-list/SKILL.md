@@ -30,29 +30,21 @@ The catalog endpoint is authenticated; require a valid key.
 
 ### 2. Fetch the catalog
 
-```
-GET https://api.jaymountconsulting.com/v1/tools
-Headers: Authorization: Bearer $OPERATOR_PASS_API_KEY
+Use the connected member MCP's `tools/list`, or:
+
+```bash
+python3 scripts/op_api.py list
 ```
 
-Returns an array of tool definitions:
-
-```json
-[
-  {
-    "slug": "cold-email-linter",
-    "name": "Cold Email Linter",
-    "category": "outbound",
-    "description": "Per-email score + line-level rewrite recommendations",
-    "schema": { "type": "object", "properties": { ... }, "required": [ ... ] }
-  },
-  ...
-]
-```
+Discovery uses authenticated `POST /mcp` JSON-RPC `tools/list` and follows
+`nextCursor`. Each entry has `name`, `description`, `inputSchema`, and optionally
+`outputSchema`. Load brand-config and SOUL first; missing setup routes to
+onboarding. Cache the catalog in-session for `cache.tool_catalog_ttl_seconds`;
+never reuse an authenticated catalog across keys or users.
 
 ### 3. Format the list
 
-Group by category. Don't dump full schemas inline — surface slug +
+Group by category only if returned; otherwise list by name. Don't dump full schemas inline — surface slug +
 description + a "see schema with `--detail`" hint.
 
 ```markdown
@@ -89,16 +81,11 @@ description + a "see schema with `--detail`" hint.
 
 ### 4. Per-tool detail mode
 
-If user asks "schema for cold-email-linter" or "detail on
-<slug>", fetch:
+If the user asks for a tool's schema, select its exact `name` from the
+cached catalog and display `inputSchema`, or run:
 
+```bash
+python3 scripts/op_api.py schema <slug>
 ```
-GET https://api.jaymountconsulting.com/v1/tools/<slug>/schema
-```
 
-And pretty-print the required + optional inputs.
-
-## Caching
-
-Cache the catalog response for 5 minutes per session — the catalog
-doesn't change often, and rate limits matter on the user's quota.
+Missing tool/schema or a discovery error is a failure; never guess a schema.
