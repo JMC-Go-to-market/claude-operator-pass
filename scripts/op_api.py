@@ -28,7 +28,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 
 DEFAULT_BASE_URL = "https://api.jaymountconsulting.com/v1"
@@ -124,33 +124,44 @@ def read_input_file(path: str) -> Dict[str, Any]:
     return read_json_object(text)
 
 
-def read_sse_response(raw: str, want_id: Any) -> Optional[Dict[str, Any]]:
-    """Return the JSON-RPC response with id want_id from a text/event-stream body.
+def read_sse_response(readline: Callable[[], bytes], want_id: Any) -> Optional[Dict[str, Any]]:
+    """Read a text/event-stream line by line and return the JSON-RPC response with id want_id.
 
-    Notifications, requests and comments before it are skipped. Returns None
-    when no event carries a matching response or an event's data is not JSON.
+    Stops as soon as that response (result or error) arrives, so a stream the
+    server keeps open does not block. Notifications, requests and comments are
+    skipped. Returns None when the stream ends without a matching response or
+    an event's data is not JSON.
     """
-    events = raw.replace("\r\n", "\n").replace("\r", "\n").split("\n\n")
-    for event in events:
-        data_lines = []
-        for line in event.split("\n"):
+    data_lines: list = []
+    total = 0
+    while True:
+        raw_line = readline()
+        total += len(raw_line)
+        if total > MAX_INPUT_BYTES:
+            return None
+        if raw_line:
+            line = raw_line.decode("utf-8", errors="ignore").rstrip("\r\n")
+        if raw_line and line:
             if line.startswith("data:"):
                 value = line[5:]
                 data_lines.append(value[1:] if value.startswith(" ") else value)
-        if not data_lines:
             continue
-        try:
-            message = json.loads("\n".join(data_lines))
-        except json.JSONDecodeError:
+        # A blank line (or the end of the stream) dispatches the event.
+        if data_lines:
+            try:
+                message = json.loads("\n".join(data_lines))
+            except json.JSONDecodeError:
+                return None
+            data_lines = []
+            if (
+                isinstance(message, dict)
+                and "method" not in message
+                and message.get("id") == want_id
+                and ("result" in message or "error" in message)
+            ):
+                return message
+        if not raw_line:
             return None
-        if (
-            isinstance(message, dict)
-            and "method" not in message
-            and message.get("id") == want_id
-            and ("result" in message or "error" in message)
-        ):
-            return message
-    return None
 
 
 def request(
@@ -181,16 +192,16 @@ def request(
         req = urllib.request.Request(url, data=data, method=method, headers=headers)
         try:
             with opener.open(req, timeout=timeout_s) as resp:
-                raw = resp.read().decode("utf-8", errors="ignore")
                 ctype = resp.headers.get("Content-Type") if resp.headers is not None else None
                 ctype = ctype.split(";", 1)[0].strip().lower() if isinstance(ctype, str) else ""
                 if api_root and ctype == "text/event-stream":
                     want_id = body.get("id") if isinstance(body, dict) else None
-                    parsed = read_sse_response(raw, want_id)
+                    parsed = read_sse_response(resp.readline, want_id)
                     if parsed is None:
                         sys.stderr.write("ERROR protocol: event stream has no matching JSON-RPC response\n")
                         return {"ok": False, "status": resp.status, "data": {"error": "invalid_sse"}}
                 else:
+                    raw = resp.read().decode("utf-8", errors="ignore")
                     try:
                         parsed = json.loads(raw) if raw else {}
                     except json.JSONDecodeError:

@@ -92,10 +92,20 @@ class Discovery(unittest.TestCase):
             self.assertEqual(api.cmd_whoami(), 1)
         self.assertIn("not JSON", err.getvalue())
 
-    def _wire(self, body, content_type):
+    def _wire(self, body, content_type, stay_open=False):
         response = unittest.mock.MagicMock()
         response.__enter__.return_value = response
-        response.read.return_value = body.encode()
+        response.read.side_effect = AssertionError("SSE must be read incrementally, not to EOF")
+        lines = [line.encode() for line in body.splitlines(keepends=True)]
+
+        def readline(*_args):
+            if lines:
+                return lines.pop(0)
+            if stay_open:
+                raise TimeoutError("stream still open")
+            return b""
+
+        response.readline.side_effect = readline
         response.status = 200
         response.headers = {"Content-Type": content_type}
         out, err = io.StringIO(), io.StringIO()
@@ -117,6 +127,12 @@ class Discovery(unittest.TestCase):
         body = f": keepalive\n\nevent: message\ndata: {note}\n\nid: 7\nevent: message\n{data_lines}\n\n"
         code, out, _ = self._wire(body, "text/event-stream; charset=utf-8")
         self.assertEqual(code, 0)
+        self.assertIn("data-atlas-search", out)
+
+    def test_sse_returns_matching_response_while_stream_stays_open(self):
+        msg = json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"tools": [TOOL]}})
+        code, out, err = self._wire(f"event: message\ndata: {msg}\n\n: keepalive\n", "text/event-stream", stay_open=True)
+        self.assertEqual(code, 0, err)
         self.assertIn("data-atlas-search", out)
 
     def test_sse_error_response_fails(self):

@@ -11,7 +11,7 @@ Closes #26.
 - Match the published result envelope: additive result fields, statuses `ok`, `partial`, `abstain`, `error`; confidence may be null with basis `unmeasured`; evidence uses `text`, `url`, `date`, `verified`; receipt requires `tool`, `version`, `as_of`.
 - No local envelope synthesis or vendored package types.
 - Atlas search/dossier use the member surface only. No other server connection is shipped. When the member catalog has no evidence tool, report evidence unavailable.
-- Discovery accepts both `application/json` and `text/event-stream` responses: the client reads SSE events, skips notifications and returns the JSON-RPC response whose id matches the request; no matching response is a protocol error.
+- Discovery accepts both `application/json` and `text/event-stream` responses: the client reads SSE events, skips notifications and returns the JSON-RPC response whose id matches the request, reading the stream line by line and stopping at that response so a stream left open does not block; no matching response is a protocol error.
 - This repository is public: tracked files outside `.github/` carry no private repository, issue, server or rollout references (`tests/test_public_content.py`).
 
 Offline tests mock every request. Production verification is outside this repository.
