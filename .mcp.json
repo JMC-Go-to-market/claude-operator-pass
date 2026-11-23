@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "operator-pass": {
+      "type": "http",
+      "url": "https://api.jaymountconsulting.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${OPERATOR_PASS_API_KEY}"
+      }
+    }
+  }
+}

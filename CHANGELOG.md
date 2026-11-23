@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Wire the plugin's member MCP using the Pass key environment variable.
+- Replace REST discovery routes with authenticated MCP catalog/schema lookup and a first-call check.
+- Add member Atlas guidance and summary-first presentation that preserves server envelope fields.
+
 ## [0.2.2] — 2026-11-08
 
 Copy fixes. No functional changes.

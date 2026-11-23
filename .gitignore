@@ -7,3 +7,6 @@ node_modules/
 .env.*
 __pycache__/
 *.pyc
+
+.operator-pass-cache/
+brand-config.json
