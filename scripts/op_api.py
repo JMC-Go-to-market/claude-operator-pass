@@ -176,9 +176,12 @@ def read_sse_response(read_chunk: Callable[[], bytes], want_id: Any) -> Optional
             elif first:
                 continue
             while True:
-                if skip_lf and buf[:1] == b"\n":
-                    buf = buf[1:]
-                skip_lf = False
+                # A CR at the end of a chunk may be the first half of CRLF: keep
+                # waiting until the next byte arrives before deciding.
+                if skip_lf and buf:
+                    if buf[:1] == b"\n":
+                        buf = buf[1:]
+                    skip_lf = False
                 cut = min((i for i in (buf.find(b"\r"), buf.find(b"\n")) if i >= 0), default=-1)
                 if cut < 0:
                     break

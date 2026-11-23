@@ -171,6 +171,11 @@ class Discovery(unittest.TestCase):
         message = api.read_sse_response(lambda: parts.pop(0) if parts else b"", 1)
         self.assertEqual(message["id"], 1)
 
+    def test_sse_crlf_split_across_chunks_inside_multiline_event(self):
+        parts = [b'data: {"jsonrpc":"2.0",\r', b'\ndata: "id":1,"result":{"tools":[]}}\r\n\r\n']
+        message = api.read_sse_response(lambda: parts.pop(0) if parts else b"", 1)
+        self.assertEqual(message, {"jsonrpc": "2.0", "id": 1, "result": {"tools": []}})
+
     def test_sse_error_response_fails(self):
         msg = json.dumps({"jsonrpc": "2.0", "id": 1, "error": {"code": -32601, "message": "Method not found"}})
         code, _, err = self._wire(f"event: message\ndata: {msg}\n\n", "text/event-stream")
