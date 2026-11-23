@@ -8,8 +8,10 @@ Closes #26.
 - Select `inputSchema` by exact tool name, follow pagination, fail on protocol errors.
 - Keep REST execution as the fallback; schemas come from the MCP catalog.
 - Present the server envelope summary first, preserve all fields, never derive status or routing from model self-report.
-- Match the current jmc-packages#422 shape: additive result fields, statuses `ok`, `partial`, `abstain`, `error`; confidence may be null with basis `unmeasured`; evidence uses `text`, `url`, `date`, `verified`; receipt requires `tool`, `version`, `as_of`.
-- No local envelope synthesis or vendored package types. Server rollout depends on the #422 release; no vendor sync is applicable here.
-- Atlas search/dossier use the member surface only; evidence moves to the knowledge pack. No internal server connection is shipped. Specs, concepts and dated claims come first; wiki pages wait for their leak check.
+- Match the published result envelope: additive result fields, statuses `ok`, `partial`, `abstain`, `error`; confidence may be null with basis `unmeasured`; evidence uses `text`, `url`, `date`, `verified`; receipt requires `tool`, `version`, `as_of`.
+- No local envelope synthesis or vendored package types.
+- Atlas search/dossier use the member surface only. No other server connection is shipped. When the member catalog has no evidence tool, report evidence unavailable.
+- Discovery accepts both `application/json` and `text/event-stream` responses: the client reads SSE events, skips notifications and returns the JSON-RPC response whose id matches the request; no matching response is a protocol error.
+- This repository is public: tracked files outside `.github/` carry no private repository, issue, server or rollout references (`tests/test_public_content.py`).
 
-Offline tests mock every request. Production verification and the knowledge pack backend are outside this repository.
+Offline tests mock every request. Production verification is outside this repository.

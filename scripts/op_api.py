@@ -124,6 +124,35 @@ def read_input_file(path: str) -> Dict[str, Any]:
     return read_json_object(text)
 
 
+def read_sse_response(raw: str, want_id: Any) -> Optional[Dict[str, Any]]:
+    """Return the JSON-RPC response with id want_id from a text/event-stream body.
+
+    Notifications, requests and comments before it are skipped. Returns None
+    when no event carries a matching response or an event's data is not JSON.
+    """
+    events = raw.replace("\r\n", "\n").replace("\r", "\n").split("\n\n")
+    for event in events:
+        data_lines = []
+        for line in event.split("\n"):
+            if line.startswith("data:"):
+                value = line[5:]
+                data_lines.append(value[1:] if value.startswith(" ") else value)
+        if not data_lines:
+            continue
+        try:
+            message = json.loads("\n".join(data_lines))
+        except json.JSONDecodeError:
+            return None
+        if (
+            isinstance(message, dict)
+            and "method" not in message
+            and message.get("id") == want_id
+            and ("result" in message or "error" in message)
+        ):
+            return message
+    return None
+
+
 def request(
     method: str,
     path: str,
@@ -153,11 +182,20 @@ def request(
         try:
             with opener.open(req, timeout=timeout_s) as resp:
                 raw = resp.read().decode("utf-8", errors="ignore")
-                try:
-                    parsed = json.loads(raw) if raw else {}
-                except json.JSONDecodeError:
-                    sys.stderr.write("ERROR protocol: API response is not JSON\n")
-                    return {"ok": False, "status": resp.status, "data": {"error": "invalid_json"}}
+                ctype = resp.headers.get("Content-Type") if resp.headers is not None else None
+                ctype = ctype.split(";", 1)[0].strip().lower() if isinstance(ctype, str) else ""
+                if api_root and ctype == "text/event-stream":
+                    want_id = body.get("id") if isinstance(body, dict) else None
+                    parsed = read_sse_response(raw, want_id)
+                    if parsed is None:
+                        sys.stderr.write("ERROR protocol: event stream has no matching JSON-RPC response\n")
+                        return {"ok": False, "status": resp.status, "data": {"error": "invalid_sse"}}
+                else:
+                    try:
+                        parsed = json.loads(raw) if raw else {}
+                    except json.JSONDecodeError:
+                        sys.stderr.write("ERROR protocol: API response is not JSON\n")
+                        return {"ok": False, "status": resp.status, "data": {"error": "invalid_json"}}
                 return {
                     "ok": True,
                     "status": resp.status,

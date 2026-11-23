@@ -92,6 +92,45 @@ class Discovery(unittest.TestCase):
             self.assertEqual(api.cmd_whoami(), 1)
         self.assertIn("not JSON", err.getvalue())
 
+    def _wire(self, body, content_type):
+        response = unittest.mock.MagicMock()
+        response.__enter__.return_value = response
+        response.read.return_value = body.encode()
+        response.status = 200
+        response.headers = {"Content-Type": content_type}
+        out, err = io.StringIO(), io.StringIO()
+        with patch.dict(api.os.environ, {"OPERATOR_PASS_API_KEY": "dummy-not-a-key", "OPERATOR_PASS_BASE_URL": api.DEFAULT_BASE_URL}), patch.object(api.urllib.request, "build_opener") as opener, contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            opener.return_value.open.return_value = response
+            code = api.cmd_list()
+        return code, out.getvalue(), err.getvalue()
+
+    def test_sse_discovery_succeeds(self):
+        msg = json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"tools": [TOOL]}})
+        code, out, _ = self._wire(f"event: message\ndata: {msg}\n\n", "text/event-stream")
+        self.assertEqual(code, 0)
+        self.assertIn("data-atlas-search", out)
+
+    def test_sse_skips_preceding_notifications_and_multiline_data(self):
+        note = json.dumps({"jsonrpc": "2.0", "method": "notifications/message", "params": {"level": "info"}})
+        msg = json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"tools": [TOOL]}}, indent=1)
+        data_lines = "\n".join("data: " + line for line in msg.splitlines())
+        body = f": keepalive\n\nevent: message\ndata: {note}\n\nid: 7\nevent: message\n{data_lines}\n\n"
+        code, out, _ = self._wire(body, "text/event-stream; charset=utf-8")
+        self.assertEqual(code, 0)
+        self.assertIn("data-atlas-search", out)
+
+    def test_sse_error_response_fails(self):
+        msg = json.dumps({"jsonrpc": "2.0", "id": 1, "error": {"code": -32601, "message": "Method not found"}})
+        code, _, err = self._wire(f"event: message\ndata: {msg}\n\n", "text/event-stream")
+        self.assertEqual(code, 1)
+        self.assertIn("Method not found", err)
+
+    def test_sse_without_matching_response_fails(self):
+        note = json.dumps({"jsonrpc": "2.0", "method": "notifications/progress", "params": {}})
+        code, _, err = self._wire(f"data: {note}\n\n", "text/event-stream")
+        self.assertEqual(code, 1)
+        self.assertIn("ERROR", err)
+
     def test_plugin_wires_only_member_mcp_with_env_placeholder(self):
         config = json.loads((ROOT / ".mcp.json").read_text())
         self.assertEqual(config, {"mcpServers": {"operator-pass": {"type": "http", "url": "https://api.jaymountconsulting.com/mcp", "headers": {"Authorization": "Bearer ${OPERATOR_PASS_API_KEY}"}}}})
