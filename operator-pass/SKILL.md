@@ -101,6 +101,7 @@ structured JSON (not LLM-narrated prose).
 |---|---|
 | `data-atlas-search` | Find data sources by text, tag or category. Returns a short list of slugs |
 | `data-atlas-dossier` | The full dossier for one source: coverage, who it fits, pricing reality, what it pairs with, compliance, citations |
+| `data-atlas-evidence` | The Atlas's stored publisher claim receipts for one named source: up to 5 excerpts with links and check dates |
 
 (Full catalog + per-tool input schema at runtime via `/operator-pass list`.)
 
@@ -136,6 +137,7 @@ Detect intent from the user's request:
 | "Score this ad creative" | `ad-creative-scorer` |
 | "Which data source covers <need>?" | `data-atlas-search`, then `data-atlas-dossier` |
 | "Tell me about <data source>" | `data-atlas-dossier` |
+| "What evidence has the Atlas stored for <data source>?" | `data-atlas-evidence` with its `source_slug` from `data-atlas-search` |
 
 If intent is ambiguous, ask one clarifying question. Don't list tools
 unless the user asks.
@@ -174,11 +176,14 @@ Each tool returns structured JSON. Pretty-print the result, then offer
   `cohort-economics-modeler`): "Want me to run a sensitivity analysis
   on the top 2 levers?"
 
-## Data Atlas: search, then dossier
+## Data Atlas: search, dossier, evidence
 
-Use these two tools when you are choosing where data comes from: a list
+Use these tools when you are choosing where data comes from: a list
 source, an enrichment vendor, a signal feed. Search first, read the
-dossier for the two or three best matches, then pick. Both are read-only.
+dossier for the two or three best matches, then inspect stored claim
+receipts for a named source with `data-atlas-evidence`. It does not search
+outside commentary or reviews. All three are read-only. Follow the
+one-call-per-request confirmation rule before calling another tool.
 
 ### `data-atlas-search`
 
@@ -231,11 +236,74 @@ Treat that as "not in the Atlas yet". Say so, and go back to
 `data-atlas-search` for another match. Do not fill in a dossier
 yourself.
 
+### `data-atlas-evidence`
+
+Inputs:
+
+| Field | Type | Notes |
+|---|---|---|
+| `query` | string, 3-200 chars after trimming, required | The data need or question; ranks stored claim receipts for the named source |
+| `source_slug` | string, optional in the schema, up to 120 chars | A slug from `data-atlas-search`, matching `^[a-z0-9][a-z0-9-]*$` (lowercase letters, digits and hyphens; first character must be a letter or digit) |
+
+Without `source_slug`, the API abstains: obtain a slug from
+`data-atlas-search` before expecting passages. Only the two fields above
+are accepted; additional input fields are rejected.
+
+Output (illustrative successful response, not a live result):
+
+```json
+{
+  "query": "...",
+  "passages": [
+    { "excerpt": "...", "title": "Source name", "url": "https://example.com/source", "source_type": "publisher", "published_at": null, "checked_at": "YYYY-MM-DD" }
+  ],
+  "note": "Excerpts the Atlas stored for this source, each with its link and the date it was checked. Read the page before relying on it.",
+  "summary": "1 stored excerpt(s) for Source name.",
+  "status": "ok",
+  "confidence": { "value": null, "basis": "unmeasured" },
+  "abstain": null,
+  "unknowns": [],
+  "assumptions": [],
+  "evidence": [
+    { "text": "...", "url": "https://example.com/source", "date": "YYYY-MM-DD", "verified": false }
+  ],
+  "limits": ["Excerpts are as recorded on the check date; the page may have changed. Shape-checked, not re-read on each call."],
+  "next_action": null,
+  "receipt": { "tool": "data-atlas-evidence", "version": "1", "as_of": "YYYY-MM-DD" }
+}
+```
+
+Up to 5 passages, ranked by query word overlap with stored receipts.
+Each `excerpt` is 300 characters or less. The current implementation emits
+`source_type: publisher`, the source's name as `title`, and
+`published_at: null`. `checked_at` is the recorded check date, not a
+publication date; the schema allows it to be absent or null, and allows
+`source_type` and `published_at` to be null.
+
+Receipts were recorded on their check date and are not re-read on each call;
+the page may have changed. Read the linked page before relying on it.
+Quote the excerpt with its link and retain the check date; do not present
+it as JMC's view or expand it into claims the excerpt does not make.
+
+The response envelope includes `summary`, `status`, `confidence`, `abstain`,
+`unknowns`, `assumptions`, `evidence`, `limits`, `next_action` and `receipt`.
+Success uses `status: ok`; confidence is unmeasured, and evidence entries
+have `verified: false`. On success, `receipt.as_of` is the latest stored
+claim check date, not evidence of a fresh page read.
+
+Empty `passages` with `status: abstain` can mean a missing slug, an unknown source,
+or no stored receipts for that source. Surface the returned `abstain.reason`,
+`abstain.to_collect`, `unknowns` and `next_action` guidance. For a missing or
+unknown slug, obtain a valid slug from `data-atlas-search`; for no stored
+receipts, consult `data-atlas-dossier` and the source's own site. Ask before
+another tool call. Do not infer that no evidence exists about the question.
+
 ### Example
 
 ```bash
 python3 scripts/op_api.py call data-atlas-search --input '{"query":"job change signals","limit":5}'
 python3 scripts/op_api.py call data-atlas-dossier --input '{"slug":"<slug>"}'
+python3 scripts/op_api.py call data-atlas-evidence --input '{"query":"how accurate is its job change data","source_slug":"<slug>"}'
 ```
 
 ## Sub-skills
