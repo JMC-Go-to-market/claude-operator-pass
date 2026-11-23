@@ -96,16 +96,16 @@ class Discovery(unittest.TestCase):
         response = unittest.mock.MagicMock()
         response.__enter__.return_value = response
         response.read.side_effect = AssertionError("SSE must be read incrementally, not to EOF")
-        lines = [line.encode() for line in body.splitlines(keepends=True)]
+        chunks = [line.encode() for line in body.splitlines(keepends=True)]
 
-        def readline(*_args):
-            if lines:
-                return lines.pop(0)
+        def read1(*_args):
+            if chunks:
+                return chunks.pop(0)
             if stay_open:
                 raise TimeoutError("stream still open")
             return b""
 
-        response.readline.side_effect = readline
+        response.read1.side_effect = read1
         response.status = 200
         response.headers = {"Content-Type": content_type}
         out, err = io.StringIO(), io.StringIO()
@@ -134,6 +134,42 @@ class Discovery(unittest.TestCase):
         code, out, err = self._wire(f"event: message\ndata: {msg}\n\n: keepalive\n", "text/event-stream", stay_open=True)
         self.assertEqual(code, 0, err)
         self.assertIn("data-atlas-search", out)
+
+    def _real_open_stream(self, payload):
+        """A real chunked http.client.HTTPResponse whose server keeps the stream open."""
+        import http.client
+        import socket
+        server, client = socket.socketpair()
+        self.addCleanup(server.close)
+        self.addCleanup(client.close)
+        client.settimeout(3)
+        head = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n"
+        server.sendall(head + b"%x\r\n" % len(payload) + payload + b"\r\n")
+        resp = http.client.HTTPResponse(client)
+        resp.begin()
+        return resp
+
+    def test_sse_real_response_cr_only_and_bom_on_open_stream(self):
+        note = json.dumps({"jsonrpc": "2.0", "method": "notifications/message", "params": {}}).encode()
+        msg = json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"tools": [TOOL]}}).encode()
+        cases = {
+            "cr only": b"data: " + note + b"\r\rdata: " + msg + b"\r\r",
+            "bom": b"\xef\xbb\xbfdata: " + msg + b"\n\n",
+            "crlf split": b"data: " + note + b"\r\n\r\ndata: " + msg + b"\r\n\r\n",
+        }
+        for name, payload in cases.items():
+            with self.subTest(name):
+                resp = self._real_open_stream(payload)
+                started = api.time.monotonic()
+                message = api.read_sse_response(api.sse_chunks(resp), 1)
+                self.assertLess(api.time.monotonic() - started, 2, "returned without waiting for the stream to close")
+                self.assertEqual(message["result"]["tools"][0]["name"], "data-atlas-search")
+
+    def test_sse_cr_at_chunk_boundary_before_lf_is_one_line_end(self):
+        msg = json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"tools": [TOOL]}}).encode()
+        parts = [b"data: " + msg + b"\r", b"\n", b"\r", b"\n"]
+        message = api.read_sse_response(lambda: parts.pop(0) if parts else b"", 1)
+        self.assertEqual(message["id"], 1)
 
     def test_sse_error_response_fails(self):
         msg = json.dumps({"jsonrpc": "2.0", "id": 1, "error": {"code": -32601, "message": "Method not found"}})

@@ -124,44 +124,82 @@ def read_input_file(path: str) -> Dict[str, Any]:
     return read_json_object(text)
 
 
-def read_sse_response(readline: Callable[[], bytes], want_id: Any) -> Optional[Dict[str, Any]]:
-    """Read a text/event-stream line by line and return the JSON-RPC response with id want_id.
+def sse_chunks(resp: Any) -> Callable[[], bytes]:
+    """Return a reader that yields bytes as soon as they arrive (b"" at the end)."""
+    read1 = getattr(resp, "read1", None)
+    if callable(read1):
+        return lambda: read1(65536)
+    return lambda: resp.read(1)
 
-    Stops as soon as that response (result or error) arrives, so a stream the
+
+def read_sse_response(read_chunk: Callable[[], bytes], want_id: Any) -> Optional[Dict[str, Any]]:
+    """Read a text/event-stream incrementally and return the JSON-RPC response with id want_id.
+
+    Lines end at CR, LF or CRLF; one leading UTF-8 BOM is dropped. Returns as
+    soon as the matching response (result or error) arrives, so a stream the
     server keeps open does not block. Notifications, requests and comments are
     skipped. Returns None when the stream ends without a matching response or
     an event's data is not JSON.
     """
-    data_lines: list = []
+    buf = b""
     total = 0
-    while True:
-        raw_line = readline()
-        total += len(raw_line)
-        if total > MAX_INPUT_BYTES:
-            return None
-        if raw_line:
-            line = raw_line.decode("utf-8", errors="ignore").rstrip("\r\n")
-        if raw_line and line:
-            if line.startswith("data:"):
-                value = line[5:]
-                data_lines.append(value[1:] if value.startswith(" ") else value)
-            continue
-        # A blank line (or the end of the stream) dispatches the event.
-        if data_lines:
-            try:
-                message = json.loads("\n".join(data_lines))
-            except json.JSONDecodeError:
+    first = True
+    skip_lf = False
+    data_lines: list = []
+
+    def dispatch() -> Optional[Dict[str, Any]]:
+        try:
+            message = json.loads("\n".join(data_lines))
+        except json.JSONDecodeError:
+            raise ValueError("invalid event data")
+        if (
+            isinstance(message, dict)
+            and "method" not in message
+            and message.get("id") == want_id
+            and ("result" in message or "error" in message)
+        ):
+            return message
+        return None
+
+    try:
+        while True:
+            chunk = read_chunk()
+            eof = not chunk
+            total += len(chunk)
+            if total > MAX_INPUT_BYTES:
                 return None
-            data_lines = []
-            if (
-                isinstance(message, dict)
-                and "method" not in message
-                and message.get("id") == want_id
-                and ("result" in message or "error" in message)
-            ):
-                return message
-        if not raw_line:
-            return None
+            buf += chunk
+            if first and len(buf) >= 3 or first and eof:
+                if buf.startswith(b"\xef\xbb\xbf"):
+                    buf = buf[3:]
+                first = False
+            elif first:
+                continue
+            while True:
+                if skip_lf and buf[:1] == b"\n":
+                    buf = buf[1:]
+                skip_lf = False
+                cut = min((i for i in (buf.find(b"\r"), buf.find(b"\n")) if i >= 0), default=-1)
+                if cut < 0:
+                    break
+                line = buf[:cut].decode("utf-8", errors="ignore")
+                skip_lf = buf[cut:cut + 1] == b"\r"
+                buf = buf[cut + 1:]
+                if line:
+                    if line.startswith("data:"):
+                        value = line[5:]
+                        data_lines.append(value[1:] if value.startswith(" ") else value)
+                    continue
+                if data_lines:
+                    message = dispatch()
+                    data_lines = []
+                    if message is not None:
+                        return message
+            if eof:
+                # An unterminated final event is discarded, as the SSE standard requires.
+                return None
+    except ValueError:
+        return None
 
 
 def request(
@@ -196,7 +234,7 @@ def request(
                 ctype = ctype.split(";", 1)[0].strip().lower() if isinstance(ctype, str) else ""
                 if api_root and ctype == "text/event-stream":
                     want_id = body.get("id") if isinstance(body, dict) else None
-                    parsed = read_sse_response(resp.readline, want_id)
+                    parsed = read_sse_response(sse_chunks(resp), want_id)
                     if parsed is None:
                         sys.stderr.write("ERROR protocol: event stream has no matching JSON-RPC response\n")
                         return {"ok": False, "status": resp.status, "data": {"error": "invalid_sse"}}
