@@ -1,6 +1,6 @@
 ---
 name: gtm-data-atlas
-description: Choose data sources from the member GTM Data Atlas when asked which source covers a need, to compare data vendors, or to pick an enrichment source.
+description: Choose data sources from the member GTM Data Atlas. Use when the user asks which source covers a data need, to compare data vendors, or to pick an enrichment source. Not for running a JMC API tool (use operator-pass-call) or listing the tools (use operator-pass-list).
 allowed-tools: Read Bash
 license: MIT
 ---

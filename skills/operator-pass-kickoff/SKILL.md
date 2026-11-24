@@ -1,6 +1,6 @@
 ---
 name: operator-pass-kickoff
-description: Adaptive router for the Operator Pass API skill pack. Detects state (API key set? brand-config? key still valid? quota remaining? recent calls?) and picks the next-best step. Loaded by the main operator-pass skill on bare invocation.
+description: Router for the Operator Pass API skill pack. Checks state (key set and valid, brand-config present, quota left, recent calls) and picks the next step. Use when the pack is invoked with no clear task, or the user asks for Operator Pass status or where to start. Not for first-time setup when brand-config.json or SOUL.md is missing (use operator-pass-onboarding), listing tools (use operator-pass-list), or running a named tool (use operator-pass-call).
 user-invocable: false
 allowed-tools: Read Bash
   - Grep

@@ -5,14 +5,14 @@ description: >
   api.jaymountconsulting.com/v1/tools/<slug> for cross-runtime agent use —
   Cold Email Linter, EVP Generator, Pipeline Calculator, GEO Visibility
   Audit, Competitive Teardown, Paid Media Teardown, Blended GTM Dashboard,
-  GTM Data Atlas search and dossiers, plus more multi-input modelers and
-  generators. Bring your own Operator
+  plus more multi-input modelers and generators. Bring your own Operator
   Pass API key (env var OPERATOR_PASS_API_KEY); subscribe at
-  jaymountconsulting.com/operator-pass. Triggers on: "lint this cold email",
-  "generate an EVP via API", "run the pipeline calculator", "GEO audit",
-  "competitive teardown", "operator pass tool", "JMC API", "subscription
-  tool", "agent-callable tool", "data atlas", "which data source covers",
-  "compare data vendors", "pick an enrichment source".
+  jaymountconsulting.com/operator-pass. Use when the user asks to "lint this
+  cold email", "generate an EVP via API", "run the pipeline calculator",
+  "GEO audit", "competitive teardown", or names an "operator pass tool",
+  the "JMC API", a "subscription tool" or an "agent-callable tool". Not for
+  choosing a data source, comparing data vendors or picking an enrichment
+  source (use gtm-data-atlas).
 allowed-tools: Read Bash WebFetch
 license: MIT
 

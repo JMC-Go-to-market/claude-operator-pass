@@ -1,6 +1,6 @@
 ---
 name: operator-pass-onboarding
-description: First-run interactive setup for the Operator Pass API skill pack. Validates the OPERATOR_PASS_API_KEY env var, fetches the live tool catalog, captures the operator's preferred tools + won't-call list + failure handling preferences + quota awareness. Writes brand-config.json + SOUL.md. Loaded automatically when either file is missing.
+description: First-run setup for the Operator Pass API skill pack. Checks the OPERATOR_PASS_API_KEY env var, fetches the live tool catalog, records preferred tools, a won't-call list, failure handling and quota awareness, and writes brand-config.json and SOUL.md. Use when either file is missing, or the user asks to set up or configure Operator Pass. Not for picking the next step once setup exists (use operator-pass-kickoff), or running a tool (use operator-pass-call).
 user-invocable: false
 allowed-tools: Read Write Bash
   - WebFetch
