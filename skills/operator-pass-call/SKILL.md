@@ -1,6 +1,6 @@
 ---
 name: operator-pass-call
-description: Invoke a specific JMC API tool by slug. Validates the API key, fetches the per-tool input schema, validates the user's inputs, makes the POST call, and pretty-prints the structured response. Loaded by the main operator-pass skill when the user knows which tool they want.
+description: Call one JMC API tool by its slug. It checks the key, fetch the tool's input schema, check the inputs, POST the call and print the result. Use when the user names the tool to run, such as "run the cold-email-linter on this draft" or "call evp-generator with these inputs". Not for finding which tool exists or fits (use operator-pass-list), first-time setup (use operator-pass-onboarding), or an unclear ask (use operator-pass-kickoff).
 user-invocable: false
 allowed-tools: Read Bash WebFetch
 license: MIT
