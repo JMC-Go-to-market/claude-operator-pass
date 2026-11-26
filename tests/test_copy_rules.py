@@ -13,7 +13,7 @@ SKIP = {"CHANGELOG.md", "LICENSE", "SOUL.md"}  # SOUL.md is the user's own templ
 
 
 def copy_files():
-    files = [ROOT / ".claude-plugin" / "plugin.json"]
+    files = [ROOT / ".claude-plugin" / "plugin.json", ROOT / "assets" / "spec.json"]
     for p in ROOT.rglob("*.md"):
         rel = p.relative_to(ROOT)
         if rel.parts[0] in {".git", ".github", "tests"} or rel.name in SKIP:
@@ -25,7 +25,7 @@ def copy_files():
 RULES = {
     "office hours 'with Jay'": r"(?i)\bwith jay\b",
     "cadence promise": r"(?i)\b(weekly|monthly|daily|every \w+day)\b",
-    "typed count": r"(?i)\b\d+\+?\s*(free\s+)?(tools?|courses?|modules?|packs?|more)\b|\b\d+-tool\b|and \d+ more",
+    "typed count": r"(?i)\b\d+\+?\s*(free\s+)?(tools?|courses?|modules?|packs?|more|endpoints?)\b|\b\d+\s+GTM\s+tools?\b|\b\d+-tool\b|and \d+ more",
     "typed price": r"\$\s?\d",
     "legal name as brand": r"Jay Mount Consulting",
     # Planning labels per jaymount-site .specs/no-internal-labels-in-copy.md
