@@ -30,7 +30,7 @@ safe_skill_name() {
 }
 
 # Skip .git. Any other symlink is refused before a destination is deleted.
-if find "$TEMP_DIR" -path "$TEMP_DIR/.git" -prune -o -type l -print | grep -q .; then
+if [ -n "$(find "$TEMP_DIR" -path "$TEMP_DIR/.git" -prune -o -type l -print -quit)" ]; then
   echo "ERROR: the pack contains a symlink. Not installing." >&2
   exit 1
 fi
